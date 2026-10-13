@@ -34,6 +34,24 @@ claude            # or: codex, gemini, cursor …  → "Set me up"
 - Data stays on your machine as plain text (JSONL/Markdown). Whatever the agent *reads* is processed
   by your model provider — agents prefer aggregated summaries and don't store photos.
 
+## Household, phone and home screen
+
+- **Several people, one kitchen.** `bos household init` turns the setup into household mode: each
+  person gets a private instance folder (`me/`, `people/<id>/`, added with `bos profile add`), the
+  pantry, cookbook and shopping list move to a shared private `household/`. Nobody is tracked
+  before their own interview and consent.
+- **Dashboard on the phone.** `bos dashboard --lan` serves the dashboard in your home network. On the
+  Mac open `http://127.0.0.1:8030/devices`, scan the QR code with the phone, then Share → "Add to
+  Home Screen" for an app-like view. Everyone picks their avatar ("Who are you?").
+- **Always on (macOS).** `bos service install --lan` runs it in the background (launchd);
+  `bos service status` / `uninstall`.
+
+> **Privacy caveat.** The device link contains the household key: **anyone with it sees every
+> profile of the household** — give it only to household members and rotate it
+> (`bos dashboard --rotate-key`) if a phone is lost. Traffic is plain HTTP inside your home network,
+> so use it only on a network you trust. The Mac must be awake for phones to reach it; macOS may ask
+> once whether Python may accept incoming connections. Without `--lan` nothing changes: 127.0.0.1 only.
+
 ## Modules
 
 core · sleep · nutrition · pantry & cooking · training · substances · health checks · devices ·
@@ -42,10 +60,11 @@ reviews — see [modules/](modules/README.md).
 ## Tools
 
 `tools/bos.py` (Python 3.9+, stdlib only): `init`, `doctor`, `log`, `pantry-log`, `validate`,
-`summary`, `pantry`, `build`, `dash` (Datasette raw tables), `dashboard` (eight tabs — Today, Body,
+`summary`, `pantry`, `build`, `dash` (Datasette raw tables), `household`, `profile`, `service`,
+`dashboard` (eight tabs — Today, Body,
 Nutrition, Kitchen, Sleep & energy, Substances, Training, Journal — with plan phases, due items,
-goal corridors, costs and reviews; served read-only on 127.0.0.1, live from `me/`, no external
-requests), `foods-import`, `food search|calc`. Tests:
+goal corridors, costs and reviews; profile switcher; served read-only on 127.0.0.1, or in the LAN
+with a household key; live from the private folders; no external requests; home-screen ready), `foods-import`, `food search|calc`. Tests:
 `python3 -m unittest discover -s tests`.
 
 ## Data sources and credits
@@ -54,7 +73,7 @@ requests), `foods-import`, `food search|calc`. Tests:
   doi:10.25826/Data20251217-134202-0 — downloaded locally, not redistributed.
 - BLS parsing approach adapted from [Supper-Board](https://github.com/fabianxvogt/Supper-Board) (MIT).
 - Open Food Facts (ODbL) for packaged products (planned).
-- [Apache ECharts](https://echarts.apache.org) 5.5.1 (Apache-2.0), vendored for the dashboard in
-  [tools/dashboard/vendor/](tools/dashboard/vendor/README.md).
+- [Apache ECharts](https://echarts.apache.org) 5.5.1 (Apache-2.0) and qrcode-generator 1.4.4 by
+  Kazuhiko Arase (MIT), vendored for the dashboard in [tools/dashboard/vendor/](tools/dashboard/vendor/README.md).
 
 MIT licensed. Docs index: [docs/README.md](docs/README.md).

@@ -2,11 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#f3f2ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="body-os">
 <title>body-os</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
 </head>
@@ -31,6 +39,10 @@
         <button type="button" data-days="14">14</button><button type="button" data-days="30">30</button><button type="button" data-days="90">90</button><button type="button" data-days="all">All</button>
       </div>
       <button type="button" class="icon-btn theme-btn" aria-label="Toggle theme"></button>
+      <div class="profile" id="profile" hidden>
+        <button type="button" class="avatar-btn" id="avatar-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu"></button>
+        <div class="menu" id="profile-menu" role="menu" hidden></div>
+      </div>
     </div>
   </div>
 </header>
@@ -43,6 +55,16 @@
   <div id="panels"></div>
   <footer class="foot" id="foot"></footer>
 </main>
+<div class="chooser" id="chooser" role="dialog" aria-modal="true" aria-labelledby="chooser-title" hidden>
+  <div class="chooser-inner">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>
+    </div>
+    <h1 class="chooser-title" id="chooser-title">&nbsp;</h1>
+    <p class="chooser-sub" id="chooser-sub">&nbsp;</p>
+    <div class="chooser-list" id="chooser-list"></div>
+  </div>
+</div>
 <script src="vendor/echarts.min.js"></script>
 <script src="markdown.js"></script>
 <script src="app.js"></script>

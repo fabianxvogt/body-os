@@ -1,4 +1,6 @@
 /me/
+/people/
+/household/
 /data/
 .env*
 .DS_Store

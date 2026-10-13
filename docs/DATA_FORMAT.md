@@ -1,6 +1,7 @@
 # Data format
 
-All personal data lives in `me/` (see [ARCHITECTURE.md](ARCHITECTURE.md)). Plain text is the source of
+All personal data lives in `me/` (see [ARCHITECTURE.md](ARCHITECTURE.md)); in household mode in each
+member's instance folder, with the kitchen files in `household/` ([below](#household-mode-household)). Plain text is the source of
 truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.py build`).
 
 ## Files in `me/`
@@ -11,11 +12,11 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 | `me/profile.md` | baseline facts and goals from the interview (no name, birth date, address, insurance number) | Markdown |
 | `me/AGENT.md` | personal agent rules (coach style, plan rules, priorities) | Markdown |
 | `me/log/YYYY/YYYY-MM.jsonl` | health events, one JSON object per line, append-only by convention | JSONL |
-| `me/pantry/pantry.jsonl` | pantry events (purchases, consumption, discards, adjustments) | JSONL |
-| `me/recipes/cookbook.jsonl` | suggested/cooked recipes and ratings | JSONL |
+| `me/pantry/pantry.jsonl` | pantry events (purchases, consumption, discards, adjustments); `household/` in household mode | JSONL |
+| `me/recipes/cookbook.jsonl` | suggested/cooked recipes and ratings; `household/` in household mode | JSONL |
 | `me/plans/*.md` | current plans (training, start plan, substance plan …) | Markdown |
 | `me/plans/training.json` | current working weights, agent-maintained: `{exercises: [{name, plan, sets, reps, kg, next_kg?}]}` | JSON |
-| `me/pantry/shopping-list.md` | shopping list the agent writes at the weekly review (checkboxes `- [ ]` allowed) | Markdown |
+| `me/pantry/shopping-list.md` | shopping list the agent writes at the weekly review (checkboxes `- [ ]` allowed); `household/` in household mode | Markdown |
 | `me/reviews/YYYY-Www.md`, `me/reviews/YYYY-MM.md` | weekly and monthly reviews; the dashboard shows the first item under a heading containing "Fokus"/"Focus" as the week's focus | Markdown |
 | `me/doctor/` | doctor checklists, transcribed lab values (raw PDFs optional, never required) | Markdown |
 | `me/inbox/` | device exports waiting for import (JSON/CSV) | any |
@@ -53,7 +54,7 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 Unknown extra fields are allowed and preserved. Units are metric. Ratings are 1 (worst) – 5 (best);
 for `stress`, 5 = most stressed.
 
-## Pantry events (`me/pantry/pantry.jsonl`)
+## Pantry events (`pantry/pantry.jsonl`)
 
 | `type` | Fields |
 |---|---|
@@ -80,12 +81,49 @@ Derived status (`bos pantry`):
 
 Items in `check` or `discard` are never used in cooking suggestions.
 
-## Cookbook (`me/recipes/cookbook.jsonl`)
+## Cookbook (`recipes/cookbook.jsonl`)
 
 `id`, `ts`, `name`, `cuisine`, `device` (`stove`/`oven`/`thermomix`/`microwave`/`none`),
 `minutes`, `servings`, `simplicity` 1–5, `nutrition_score` 1–5, `per_serving` {`kcal`, `protein_g`},
 `status` (`suggested`/`cooked`), `rating` (`up`/`down`/null), `skill`? (technique learned), `source`
 (`generated`, `cookidoo:<name>`, URL), `notes`.
+
+## Household mode (`household/`)
+
+Private git repo next to the instance folders (git-ignored, no remote). Example:
+[examples/demo-household/](../examples/demo-household/).
+
+`household/household.json`:
+
+```json
+{"schema": 1, "name": "Home",
+ "members": [{"id": "alex", "name": "Alex", "color": "blue", "path": "me", "consent": true},
+             {"id": "sam", "name": "Sam", "color": "orange", "path": "people/sam", "consent": false}],
+ "default_member": "alex"}
+```
+
+| Field | Rule |
+|---|---|
+| `id` | `[a-z0-9][a-z0-9_-]{0,31}`, unique; used by `--profile` and `?profile=` |
+| `name` | display name in the dashboard (a first name or nickname is enough) |
+| `color` | avatar colour slot: `blue`, `orange`, `aqua`, `yellow`, `magenta`, `green`, `violet`, `red` |
+| `path` | instance folder relative to the folder containing `household/` (the engine root), e.g. `me`, `people/sam`; no `..`, no hidden or engine folders, no folder inside another member's |
+| `consent` | `true` once the member did their own interview and agreed to tracking; `false` = nothing is logged for them |
+| `default_member` | profile used when `--profile` is not given (optional; else the member at `me/`) |
+
+`household/settings.json`: shared keys that override each member's settings — `language`,
+`timezone` (only if the member has none), `household` (`members`, `portions_default`, `shared_notes`),
+`kitchen`, `pantry`, `cooking`, and `costs` (merged key by key; typically only `currency`).
+
+`household/pantry/pantry.jsonl`, `household/pantry/shopping-list.md`, `household/recipes/cookbook.jsonl`:
+same formats as above, one kitchen for all members.
+
+### server.json (LAN access)
+
+`household/server.json` (single-user mode: `data/server.json`), mode 0600, both git-ignored:
+`{"schema": 1, "key": "<43-char urlsafe token>", "created": "<ISO timestamp>", "allowed_hosts": []}`.
+`key` is the household key (32 random bytes); `bos dashboard --rotate-key` replaces it.
+`allowed_hosts` lists extra Host names the dashboard accepts (e.g. a router DNS name).
 
 ## Food reference data (`data/`, git-ignored)
 
@@ -114,6 +152,7 @@ the dashboard shows an empty state or a hint when a key is missing. Defaults: [t
 | `substances.plan_b` | `{window_days: 14, phase_id: "tobacco-step-1", threshold_pct_of_baseline: 90}` | plan-B check once that phase has started: last ≤ 7 full days vs. baseline; "Plan B due" when ≥ threshold after the window |
 | `reviews.weekly` | e.g. `"sunday-evening"` (first three letters = weekday) | "weekly review due" on that day when `reviews/YYYY-Www.md` is missing |
 | `costs` | see below | spending estimates |
+| `display_name`, `color` | single-user mode only: avatar name and colour slot in the dashboard (default "Me"/"Ich", `blue`) | dashboard header |
 
 ### Costs
 

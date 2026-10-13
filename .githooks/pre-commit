@@ -1,6 +1,6 @@
 #!/bin/sh
 # body-os guard: never commit personal data from the engine repo.
-# Blocks staged paths under me/ or data/, .env* files, and *.jsonl outside examples/ that look like
+# Blocks staged paths under me/, people/, household/ or data/, .env* files, and *.jsonl outside examples/ that look like
 # body-os log lines. Enable with: git config core.hooksPath .githooks
 . "$(git rev-parse --show-toplevel)/.githooks/guard-lib.sh"
 

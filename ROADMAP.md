@@ -18,6 +18,14 @@
 - Chart generation for monthly reviews.
 
 ## Done
+- 2026-10-13: households and phones — household mode (`household/household.json`, shared pantry,
+  cookbook, shopping list and kitchen settings; `bos household init` moves the kitchen without
+  overwriting; `bos profile add|list|consent`; `--profile`, `--household`), consent gate (no events
+  for members who have not agreed; onboarding card in the dashboard), profile chooser and avatar menu,
+  household kitchen view, `bos dashboard --lan` with household key (cookie via one-time device link,
+  401 otherwise, loopback-only `/devices` QR page, Host allow-list, `--rotate-key`), PWA manifest and
+  generated icons, safe-area layout, `bos service install|uninstall|status` (macOS launchd), hooks and
+  `.gitignore` for `people/` and `household/`, `examples/demo-household/`.
 - 2026-10-13: multi-tab dashboard (hash routes `#heute` … `#journal`, English aliases): phase banner,
   check-in checklist, due today (training schedule, measurements, weekly review), week focus from the
   latest review; weight goal corridor, circumferences, ESH blood-pressure zones, labs; protein band

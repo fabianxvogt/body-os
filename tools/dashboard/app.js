@@ -17,6 +17,11 @@
       theme_dark: "Switch to dark theme", theme_light: "Switch to light theme", tabs_label: "Sections",
       table: "Table", chart: "Chart", empty: "No data yet – arrives with your first check-in",
       empty_period: "Nothing in this period", load_error: "Could not load data",
+      who: "Who are you?", who_sub: "Choose your profile – this device remembers it.", switch_profile: "Switch profile",
+      profile_of: "Profile: {name}", household: "Household", home_network: "home network",
+      not_set_up: "not set up yet", no_consent: "{name} hasn’t done the interview yet",
+      no_consent_hint: "Start: in the agent, say “Set up my profile”. Nothing is tracked for {name} until they agree – the household kitchen works already.",
+      foot_live_hh: "Live from the member folders and household/ on every reload · stays in your home network",
       no_entries: "No entries in this period yet.", no_entries_hint: "Log a check-in with your agent and reload this page.",
       day: "Day", week: "Week", wk: "W", month: "Month", total: "Total", none: "none", more: "more", less: "less",
       hypothesis: "{n} nights · hypothesis, not proof", n_nights: "{n} nights", latest: "latest", previous: "previous",
@@ -176,6 +181,11 @@
       theme_dark: "Dunkles Design", theme_light: "Helles Design", tabs_label: "Bereiche",
       table: "Tabelle", chart: "Diagramm", empty: "Noch keine Daten – kommt mit deinem ersten Check-in",
       empty_period: "Nichts in diesem Zeitraum", load_error: "Daten konnten nicht geladen werden",
+      who: "Wer bist du?", who_sub: "Wähle dein Profil – dieses Gerät merkt es sich.", switch_profile: "Profil wechseln",
+      profile_of: "Profil: {name}", household: "Haushalt", home_network: "Heimnetz",
+      not_set_up: "noch nicht eingerichtet", no_consent: "{name} hat noch kein Interview gemacht",
+      no_consent_hint: "Start: im Agenten „Richte mein Profil ein“ sagen. Bis {name} zustimmt, wird nichts erfasst – die Haushaltsküche funktioniert schon.",
+      foot_live_hh: "Live aus den Personenordnern und household/ bei jedem Neuladen · bleibt im Heimnetz",
       no_entries: "Noch keine Einträge in diesem Zeitraum.", no_entries_hint: "Mach einen Check-in mit deinem Agenten und lade die Seite neu.",
       day: "Tag", week: "Woche", wk: "KW ", month: "Monat", total: "Gesamt", none: "keiner", more: "mehr", less: "weniger",
       hypothesis: "{n} Nächte · Hypothese, kein Beweis", n_nights: "{n} Nächte", latest: "zuletzt", previous: "davor",
@@ -344,7 +354,11 @@
   var SLOTS = ["breakfast", "lunch", "dinner", "snack", "other"];
   var COSTS = ["groceries", "out", "tobacco", "cannabis", "alcohol", "coffee"];
 
-  var state = { period: null, data: null, tab: "today", panels: {}, themeVer: 0, loading: false, review: null };
+  var state = { period: null, data: null, tab: "today", panels: {}, themeVer: 0, loading: false, review: null,
+    profile: null, profiles: null };
+  // light/dark text on each member colour slot (contrast ≥ 4.5:1 on both themes' --c1…--c8)
+  var COLOR_SLOTS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red"];
+  var DARK_INK = { orange: 1, aqua: 1, yellow: 1, magenta: 1 };
   var building = null; // panel whose cards are being built (charts register here)
 
   // ------------------------------------------------------------------------------------------
@@ -1013,24 +1027,7 @@
         card.appendChild(el("p", "note", tpl(T.next_training, { day: fmtDay(due.training_next.day, { weekday: "long" }), what: what(due.training_next.what) })));
       }
     } });
-    // pantry alerts
-    var pa = TD.pantry_alerts || { counts: {}, top: [] };
-    addCard(g, { title: T.pantry_alerts, custom: function (card) {
-      var counts = el("div", "chip-row");
-      ["discard", "check", "soon"].forEach(function (s) {
-        if (pa.counts[s]) counts.appendChild(chip(PANTRY_TONE[s], pa.counts[s] + " × " + T["status_" + s], PANTRY_ICON[s]));
-      });
-      if (!counts.firstChild) card.appendChild(el("p", "muted-text", T.pantry_alerts_none));
-      else card.appendChild(counts);
-      var ul = el("ul", "rows");
-      pa.top.forEach(function (it) {
-        listRow(ul, chip(PANTRY_TONE[it.status], T["status_" + it.status], PANTRY_ICON[it.status]), it.name, expiryText(it.days_left));
-      });
-      card.appendChild(ul);
-      var a = el("a", "link", T.to_kitchen + " →");
-      a.href = "#" + slugFor("kitchen");
-      card.appendChild(a);
-    } });
+    pantryAlertsCard(g, D);
 
     // spending this month
     var sp = TD.spend_month;
@@ -1074,6 +1071,159 @@
 
     var ks = section(root, T.kpis, T.kpis_sub, "kpis");
     renderKpis(ks, D);
+  }
+
+  function pantryAlertsCard(g, D) {
+    var pa = D.tabs.today.pantry_alerts || { counts: {}, top: [] };
+    addCard(g, { title: T.pantry_alerts, sub: D.household ? T.household : null,
+      badge: D.household ? avatarStack(D.household.members) : null, custom: function (card) {
+      var counts = el("div", "chip-row");
+      ["discard", "check", "soon"].forEach(function (s) {
+        if (pa.counts[s]) counts.appendChild(chip(PANTRY_TONE[s], pa.counts[s] + " × " + T["status_" + s], PANTRY_ICON[s]));
+      });
+      if (!counts.firstChild) card.appendChild(el("p", "muted-text", T.pantry_alerts_none));
+      else card.appendChild(counts);
+      var ul = el("ul", "rows");
+      pa.top.forEach(function (it) {
+        listRow(ul, chip(PANTRY_TONE[it.status], T["status_" + it.status], PANTRY_ICON[it.status]), it.name, expiryText(it.days_left));
+      });
+      card.appendChild(ul);
+      var a = el("a", "link", T.to_kitchen + " →");
+      a.href = "#" + slugFor("kitchen");
+      card.appendChild(a);
+    } });
+  }
+
+  function tabNoConsent(root, D, id) {
+    var g = section(root, null, null, "grid-top");
+    var name = D.profile.name;
+    addCard(g, { title: tpl(T.no_consent, { name: name }), cls: "onboard-card full", custom: function (card) {
+      var row = el("div", "onboard");
+      row.appendChild(avatar(D.profile, "lg"));
+      row.appendChild(el("p", null, tpl(T.no_consent_hint, { name: name })));
+      card.appendChild(row);
+    } });
+    if (id === "today") pantryAlertsCard(g, D);
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // profiles (household members)
+  // ------------------------------------------------------------------------------------------
+
+  function avatar(m, size) {
+    var slot = COLOR_SLOTS.indexOf(m.color) + 1 || 1;
+    var a = el("span", "avatar" + (size ? " avatar-" + size : "") + (DARK_INK[m.color] ? " ink-dark" : ""), m.initials || "?");
+    a.style.setProperty("--av", "var(--c" + slot + ")");
+    a.setAttribute("aria-hidden", "true");
+    return a;
+  }
+
+  function avatarStack(members) {
+    var st = el("span", "avatar-stack");
+    st.setAttribute("role", "img");
+    st.setAttribute("aria-label", T.household + ": " + members.map(function (m) { return m.name; }).join(", "));
+    members.forEach(function (m) { var a = avatar(m, "sm"); a.title = m.name; st.appendChild(a); });
+    return st;
+  }
+
+  function householdStrip(H) {
+    var d = el("div", "household-strip");
+    d.appendChild(avatarStack(H.members));
+    d.appendChild(el("span", "household-name", T.household + (H.name ? " · " + H.name : "")));
+    return d;
+  }
+
+  function profileQuery(sep) {
+    return state.profile ? sep + "profile=" + encodeURIComponent(state.profile) : "";
+  }
+
+  function currentMember() {
+    var ms = (state.profiles && state.profiles.members) || [];
+    for (var i = 0; i < ms.length; i++) if (ms[i].id === state.profile) return ms[i];
+    return null;
+  }
+
+  function closeMenu(focusBtn) {
+    var menu = document.getElementById("profile-menu"), btn = document.getElementById("avatar-btn");
+    if (menu.hidden) return;
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (focusBtn) btn.focus();
+  }
+
+  function openMenu() {
+    var menu = document.getElementById("profile-menu"), btn = document.getElementById("avatar-btn");
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    var cur = menu.querySelector('[aria-checked="true"]') || menu.querySelector("[role=menuitemradio]");
+    if (cur) cur.focus();
+  }
+
+  function renderProfileUi() {
+    var P = state.profiles, wrap = document.getElementById("profile");
+    var m = currentMember();
+    if (!P || !m) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    var btn = document.getElementById("avatar-btn"), menu = document.getElementById("profile-menu");
+    btn.innerHTML = "";
+    btn.appendChild(avatar(m));
+    btn.setAttribute("aria-label", tpl(T.profile_of, { name: m.name }) + (P.members.length > 1 ? " – " + T.switch_profile : ""));
+    btn.title = btn.getAttribute("aria-label");
+    btn.disabled = P.members.length < 2;
+    menu.innerHTML = "";
+    menu.setAttribute("aria-label", T.switch_profile);
+    P.members.forEach(function (x) {
+      var it = el("button", "menu-item");
+      it.type = "button";
+      it.setAttribute("role", "menuitemradio");
+      it.setAttribute("aria-checked", String(x.id === state.profile));
+      it.tabIndex = -1;
+      it.appendChild(avatar(x, "sm"));
+      var lab = el("span", "menu-label", x.name);
+      if (!x.consent) lab.appendChild(el("small", null, T.not_set_up));
+      it.appendChild(lab);
+      it.appendChild(el("span", "menu-check", x.id === state.profile ? "✓" : ""));
+      it.addEventListener("click", function () { closeMenu(true); selectProfile(x.id); });
+      menu.appendChild(it);
+    });
+  }
+
+  function selectProfile(id) {
+    store("bos-profile", id);
+    var changed = state.profile !== id;
+    state.profile = id;
+    hideChooser();
+    renderProfileUi();
+    if (changed || !state.data) { state.review = null; return load(state.period); }
+  }
+
+  function showChooser() {
+    var P = state.profiles, ch = document.getElementById("chooser"), list = document.getElementById("chooser-list");
+    document.getElementById("chooser-title").textContent = T.who;
+    document.getElementById("chooser-sub").textContent = T.who_sub;
+    list.innerHTML = "";
+    P.members.forEach(function (m) {
+      var b = el("button", "chooser-item");
+      b.type = "button";
+      b.appendChild(avatar(m, "xl"));
+      var n = el("span", "chooser-name", m.name);
+      b.appendChild(n);
+      if (!m.consent) b.appendChild(el("span", "chooser-note", T.not_set_up));
+      if (m.id === state.profile) b.setAttribute("aria-current", "true");
+      b.addEventListener("click", function () { selectProfile(m.id); });
+      list.appendChild(b);
+    });
+    ch.hidden = false;
+    document.body.classList.add("choosing");
+    var first = list.querySelector("[aria-current]") || list.querySelector("button");
+    if (first) first.focus();
+  }
+
+  function hideChooser() {
+    var ch = document.getElementById("chooser");
+    if (ch.hidden) return;
+    ch.hidden = true;
+    document.body.classList.remove("choosing");
   }
 
   function expiryText(dl) {
@@ -2180,7 +2330,7 @@
         state.review = file;
         nav.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-file") === file)); });
         view.textContent = "…";
-        fetch("api/review?file=" + encodeURIComponent(file), { cache: "no-store" }).then(function (r) {
+        fetch("api/review?file=" + encodeURIComponent(file) + profileQuery("&"), { cache: "no-store" }).then(function (r) {
           return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; });
         }).then(function (j) {
           if (state.review !== file) return;
@@ -2304,8 +2454,15 @@
   function buildPanel(id, p) {
     var D = state.data;
     p.el.innerHTML = "";
+    if (id === "kitchen" && D.household) p.el.appendChild(householdStrip(D.household));
     var q = el("p", "question", T.q[id]);
     p.el.appendChild(q);
+    if (D.profile && D.profile.consent === false && id !== "kitchen") {
+      building = p;
+      try { tabNoConsent(p.el, D, id); } finally { building = null; }
+      p.built = true;
+      return;
+    }
     if (!D.period.days_logged && id !== "journal" && id !== "kitchen") {
       var bn = el("div", "banner");
       bn.appendChild(el("b", null, T.no_entries));
@@ -2363,7 +2520,14 @@
     showTab(id);
     var foot = document.getElementById("foot");
     foot.innerHTML = "";
-    [T.foot_live, T.foot_raw, T.foot_credit].forEach(function (s) { foot.appendChild(el("span", null, s)); });
+    [D.household ? T.foot_live_hh : T.foot_live, T.foot_raw, T.foot_credit].forEach(function (s) { foot.appendChild(el("span", null, s)); });
+    if (state.profiles && state.profiles.members.length > 1) {
+      var sw = el("button", "link foot-switch", T.switch_profile);
+      sw.type = "button";
+      sw.addEventListener("click", showChooser);
+      foot.appendChild(sw);
+    }
+    renderProfileUi();
   }
 
   function applyStaticText() {
@@ -2371,7 +2535,8 @@
       g.setAttribute("aria-label", T.period);
       g.querySelectorAll("button").forEach(function (b) { var d = b.getAttribute("data-days"); b.textContent = d === "all" ? T.all : d + " " + T.days; });
     });
-    document.getElementById("privacy-text").textContent = T.local_only + " · " + location.hostname;
+    var h = location.hostname, loop = h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+    document.getElementById("privacy-text").textContent = (loop ? T.local_only : T.home_network) + " · " + h;
     updateThemeButtons();
   }
 
@@ -2387,7 +2552,10 @@
   }
 
   function load(period) {
-    var url = "api/data" + (period ? "?days=" + encodeURIComponent(period) : "");
+    var q = [];
+    if (period) q.push("days=" + encodeURIComponent(period));
+    if (state.profile) q.push("profile=" + encodeURIComponent(state.profile));
+    var url = "api/data" + (q.length ? "?" + q.join("&") : "");
     state.loading = true;
     document.body.setAttribute("aria-busy", "true");
     return fetch(url, { cache: "no-store" }).then(function (r) {
@@ -2477,8 +2645,49 @@
     resizeTimer = setTimeout(function () { var p = state.panels[state.tab]; if (p && p.built) resizePanelCharts(p); }, 120);
   });
 
+  var avBtn = document.getElementById("avatar-btn"), pMenu = document.getElementById("profile-menu");
+  avBtn.addEventListener("click", function () { if (pMenu.hidden) openMenu(); else closeMenu(false); });
+  avBtn.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openMenu(); }
+  });
+  pMenu.addEventListener("keydown", function (e) {
+    var items = Array.prototype.slice.call(pMenu.querySelectorAll("[role=menuitemradio]"));
+    var i = items.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); closeMenu(true); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+    else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === "Tab") closeMenu(false);
+  });
+  document.addEventListener("click", function (e) {
+    if (!pMenu.hidden && !document.getElementById("profile").contains(e.target)) closeMenu(false);
+  });
+  document.getElementById("chooser").addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && state.data) { e.preventDefault(); hideChooser(); }
+    if (e.key === "Tab") { // keep focus inside the dialog
+      var bs = Array.prototype.slice.call(document.querySelectorAll("#chooser-list button"));
+      if (!bs.length) return;
+      var i = bs.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); bs[bs.length - 1].focus(); }
+      else if (!e.shiftKey && i === bs.length - 1) { e.preventDefault(); bs[0].focus(); }
+    }
+  });
+
   state.tab = tabFromHash();
   updateThemeButtons();
   var saved = store("bos-period");
-  load(saved === "14" || saved === "30" || saved === "90" || saved === "all" ? saved : null);
+  state.period = saved === "14" || saved === "30" || saved === "90" || saved === "all" ? saved : null;
+  fetch("api/profiles", { cache: "no-store" }).then(function (r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(function (P) {
+    state.profiles = P;
+    T = I18N[String(P.language || "en").slice(0, 2)] || I18N.en;
+    var ids = P.members.map(function (m) { return m.id; }), stored = store("bos-profile");
+    if (!ids.length) return load(state.period);
+    if (stored && ids.indexOf(stored) >= 0) return selectProfile(stored);
+    if (P.members.length >= 2) { state.profile = P["default"] || ids[0]; return showChooser(); }
+    return selectProfile(ids[0]);
+  }).catch(function () { return load(state.period); });
 })();

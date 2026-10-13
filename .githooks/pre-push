@@ -1,6 +1,6 @@
 #!/bin/sh
 # body-os guard: refuse pushes if any pushed commit's full tree (merges included) contains me/,
-# data/, .env* or log-like *.jsonl outside examples/. Enable with: git config core.hooksPath .githooks
+# people/, household/, data/, .env* or log-like *.jsonl outside examples/. Enable with: git config core.hooksPath .githooks
 . "$(git rev-parse --show-toplevel)/.githooks/guard-lib.sh"
 
 blocked=""

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "name": "Demo household",
+  "members": [
+    {"id": "alex", "name": "Alex Demo", "color": "blue", "path": "people/alex", "consent": true},
+    {"id": "sam", "name": "Sam", "color": "orange", "path": "people/sam", "consent": false}
+  ],
+  "default_member": "alex"
+}

@@ -35,6 +35,26 @@ Questions live in [CATALOG.md](CATALOG.md). Safety rules in [../SAFETY.md](../SA
 6. **First check-in instructions.** Tell the user exactly what to send tomorrow morning and how to
    reach the session from their phone if they use one.
 
+## Onboarding another household member
+
+Each adult in the household gets **their own interview and their own consent**; nobody is tracked
+because someone else set them up.
+
+1. Household mode must exist: `python3 tools/bos.py household init --member-id <id> --member-name <Name>`
+   (registers the existing `me/` and moves pantry, cookbook and shopping list to `household/`).
+2. `python3 tools/bos.py profile add <id> --name <Name> [--color <slot>]` creates `people/<id>/` (its own
+   private git repo, `consent: false`, no modules). The dashboard shows them a calm "not set up yet" card.
+3. Run this interview **with that person** (they answer, not the first member). Same rules: no real
+   name beyond the display name, explain what is stored and that the agent's reads go to the model
+   provider, safety checks, explicit go.
+4. Only after their go: `python3 tools/bos.py profile consent <id>`, fill `people/<id>/settings.json`,
+   `profile.md`, `AGENT.md` and plans, and commit inside `people/<id>/`. Kitchen preferences that
+   concern everybody go to `household/settings.json` (`household.shared_notes`) with their consent.
+5. Tell them how to open the dashboard (same device link; they pick their avatar) and that every
+   household member with the link can see their charts.
+
+Withdrawn consent: `profile consent <id> --revoke` stops logging; ask whether to delete their folder.
+
 ## Re-interview
 
 Triggered by "my goals changed", a new device, a new household situation, or at a monthly review

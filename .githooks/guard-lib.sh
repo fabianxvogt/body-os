@@ -9,7 +9,7 @@ guard_check() {
   else
     paths=$(git -c core.quotePath=false ls-tree -r -z --name-only "$src" | tr '\0' '\n')
   fi
-  printf '%s\n' "$paths" | grep -i -E '^(me|data)/' | sed 's/$/  (private instance or derived data)/'
+  printf '%s\n' "$paths" | grep -i -E '^(me|data|people|household)/' | sed 's/$/  (private instance, household or derived data)/'
   printf '%s\n' "$paths" | grep -i -E '(^|/)\.env' | sed 's/$/  (environment\/secret file)/'
   printf '%s\n' "$paths" | grep -i -E '\.jsonl$' | grep -v -i -E '^examples/' |
     while IFS= read -r f; do

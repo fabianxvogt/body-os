@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "language": "en",
+  "timezone": "Europe/Berlin",
+  "household": {"members": 2, "portions_default": 2, "shared_notes": ["Sam dislikes coriander"]},
+  "kitchen": {"devices": ["stove", "oven"], "platforms": []},
+  "pantry": {"mode": "auto", "store_prices": true, "grace_days": {"best_before": 7, "none": 2}},
+  "cooking": {"options": 4, "max_minutes_weekday": 30},
+  "costs": {"currency": "EUR"}
+}

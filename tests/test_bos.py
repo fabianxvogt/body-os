@@ -15,7 +15,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from unittest import mock
 import zipfile
 from xml.sax.saxutils import escape
 
@@ -24,6 +26,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import bos  # noqa: E402
 
 DEMO = os.path.join(ROOT, "examples", "demo-me")
+DEMO_HH = os.path.join(ROOT, "examples", "demo-household")
 DEMO_TODAY = "2026-10-13"
 BLS_ZIP = os.path.join(ROOT, "data", "sources", "BLS_4_0_2025_DE.zip")
 
@@ -706,6 +709,19 @@ class TestHooks(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("me/profile.md", r.stderr)
 
+    def test_pre_commit_blocks_people_and_household(self):
+        for rel in ("people/louise/settings.json", "household/household.json", "Household/server.json",
+                    "PEOPLE/x/profile.md"):
+            self.write(rel, "{}\n")
+            self.git("add", "-f", rel)
+            r = self.git("commit", "-qm", "leak")
+            self.assertNotEqual(r.returncode, 0, rel)
+            self.assertIn("refusing to commit", r.stderr)
+            self.git("rm", "-q", "--cached", rel)
+        self.write("examples/demo-household/people/sam/settings.json", "{}\n")
+        self.git("add", "examples")
+        self.assertEqual(self.git("commit", "-qm", "synthetic demo is fine").returncode, 0)
+
 
 def make_foods_fixture(path):
     con = sqlite3.connect(path)
@@ -840,6 +856,518 @@ class TestFoodsImport(unittest.TestCase):
         self.assertEqual(con.execute("SELECT COUNT(*) FROM nutrients").fetchone()[0], 7140 * 138)
         name, kcal = con.execute("SELECT name_de, kcal FROM foods WHERE food_id = 'bls:C133000'").fetchone()
         self.assertEqual((name, kcal), ("Hafer Flocken", 348))
+
+
+# --------------------------------------------------------------------------------------------
+# Household mode, profiles, LAN server, PWA, service
+# --------------------------------------------------------------------------------------------
+
+class TempHousehold(unittest.TestCase):
+    """A temp copy of examples/demo-household: base/household + base/people/{alex,sam}."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bos-hh-")
+        self.base = os.path.join(self.tmp, "base")
+        shutil.copytree(DEMO_HH, self.base)
+        self.hh = os.path.join(self.base, "household")
+        self.data = os.path.join(self.tmp, "data")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def bos(self, *argv, profile=None, today=DEMO_TODAY):
+        args = ["--household", self.hh, "--data", self.data, "--today", today]
+        if profile:
+            args += ["--profile", profile]
+        return run(*(args + list(argv)))
+
+    def ctx(self, profile=None):
+        return bos.Ctx(None, self.data, DEMO_TODAY, self.hh, profile)
+
+
+class TestHouseholdPaths(TempHousehold):
+    def test_single_user_paths_unchanged(self):
+        me = os.path.join(self.base, "people", "alex")
+        c = bos.Ctx(me, self.data, DEMO_TODAY)  # explicit --me without --household: single-user
+        self.assertIsNone(c.household)
+        self.assertEqual(c.pantry_path, os.path.join(me, "pantry", "pantry.jsonl"))
+        self.assertEqual(c.cookbook_path, os.path.join(me, "recipes", "cookbook.jsonl"))
+        self.assertEqual(c.profile_id, "me")
+        self.assertTrue(c.consent)
+        self.assertEqual([m["id"] for m in c.members()], ["me"])
+        with self.assertRaises(bos.BosError):
+            bos.Ctx(me, self.data, DEMO_TODAY, None, "alex")
+
+    def test_household_resolution_and_shared_kitchen(self):
+        c = self.ctx()
+        self.assertEqual(c.profile_id, "alex")  # default_member
+        self.assertEqual(os.path.realpath(c.me), os.path.realpath(os.path.join(self.base, "people", "alex")))
+        self.assertEqual(c.pantry_path, os.path.join(self.hh, "pantry", "pantry.jsonl"))
+        self.assertEqual(c.cookbook_path, os.path.join(self.hh, "recipes", "cookbook.jsonl"))
+        self.assertEqual(c.shopping_list_path, os.path.join(self.hh, "pantry", "shopping-list.md"))
+        self.assertEqual(c.settings["household"]["portions_default"], 2)   # shared key from household
+        self.assertEqual(c.settings["goals"]["protein_g_per_kg"], [1.6, 2.0])  # personal key from member
+        self.assertEqual(c.settings["costs"]["tobacco_eur_per_g"], 0.35)   # costs merged, not replaced
+        sam = self.ctx("sam")
+        self.assertFalse(sam.consent)
+        self.assertEqual(sam.pantry_path, c.pantry_path)
+        with self.assertRaises(bos.BosError):
+            self.ctx("nobody")
+        # same pantry for both members via the CLI
+        for p in ("alex", "sam"):
+            code, out, _ = self.bos("pantry", "--json", profile=p)
+            self.assertEqual(code, 0)
+            self.assertEqual(len(json.loads(out)), 14)
+
+    def test_fallback_to_instance_files_and_default_without_default_member(self):
+        os.remove(os.path.join(self.hh, "recipes", "cookbook.jsonl"))
+        mine = os.path.join(self.base, "people", "alex", "recipes", "cookbook.jsonl")
+        os.makedirs(os.path.dirname(mine))
+        shutil.copy(os.path.join(DEMO, "recipes", "cookbook.jsonl"), mine)
+        self.assertEqual(self.ctx().cookbook_path, mine)
+        hj = os.path.join(self.hh, "household.json")
+        with open(hj) as f:
+            hh = json.load(f)
+        hh["default_member"] = None
+        with open(hj, "w") as f:
+            json.dump(hh, f)
+        c = self.ctx()  # no default member, nobody at me/ -> base/me, no member
+        self.assertIsNone(c.member)
+        self.assertEqual(c.me, os.path.join(self.base, "me"))
+
+    def test_invalid_household_json_is_reported(self):
+        hj = os.path.join(self.hh, "household.json")
+        for bad in ({"members": [{"id": "a", "name": "A", "color": "pink", "path": "people/a", "consent": True}]},
+                    {"members": [{"id": "a", "name": "A", "color": "blue", "path": "../a", "consent": True}]},
+                    {"members": [{"id": "A b", "name": "A", "color": "blue", "path": "people/a", "consent": True}]},
+                    {"members": [{"id": "a", "name": "A", "color": "blue", "path": "household", "consent": True}]},
+                    {"members": [], "default_member": "x"}):
+            with open(hj, "w") as f:
+                json.dump(bad, f)
+            with self.assertRaises(bos.BosError):
+                self.ctx()
+
+    def test_dashboard_data_for_member_without_consent_has_no_personal_data(self):
+        d = bos.dashboard_data(self.ctx("sam"), "30")
+        self.assertEqual(d["profile"]["id"], "sam")
+        self.assertFalse(d["profile"]["consent"])
+        self.assertEqual(d["period"]["days_logged"], 0)
+        self.assertEqual(d["tabs"]["journal"]["reviews"], [])
+        self.assertTrue(d["tabs"]["kitchen"]["pantry"])
+        self.assertTrue(d["tabs"]["kitchen"]["shared"])
+        self.assertEqual([m["id"] for m in d["household"]["members"]], ["alex", "sam"])
+        a = bos.dashboard_data(self.ctx("alex"), "30")
+        self.assertGreater(a["period"]["days_logged"], 10)
+        self.assertEqual(a["tabs"]["kitchen"]["pantry"], d["tabs"]["kitchen"]["pantry"])
+
+
+class InitBase(unittest.TestCase):
+    """A temp engine-like root with me/ (copy of demo-me) and household/ next to it."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bos-hhinit-")
+        self.me = os.path.join(self.tmp, "me")
+        shutil.copytree(DEMO, self.me)
+        self.hh = os.path.join(self.tmp, "household")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def bos(self, *argv, profile=None):
+        args = ["--household", self.hh, "--data", os.path.join(self.tmp, "data"), "--today", DEMO_TODAY]
+        if profile:
+            args += ["--profile", profile]
+        return run(*(args + list(argv)))
+
+    def read(self, *parts):
+        with open(os.path.join(*parts), encoding="utf-8") as f:
+            return f.read()
+
+
+
+class TestConsentGate(TempHousehold):
+    def test_explicit_me_of_a_member_still_enforces_consent(self):
+        sam = os.path.join(self.base, "people", "sam")
+        with mock.patch.object(bos, "DEFAULT_HOUSEHOLD", self.hh):
+            c = bos.Ctx(sam, self.data, DEMO_TODAY)
+            self.assertEqual((c.profile_id, c.consent), ("sam", False))
+            code, _, err = run("--me", sam, "--data", self.data, "log", "--dry-run", '{"type": "weight", "kg": 60}')
+            self.assertEqual(code, 2)
+            self.assertIn("has not consented", err)
+            other = os.path.join(self.tmp, "elsewhere")
+            self.assertIsNone(bos.Ctx(other, self.data, DEMO_TODAY).household)  # unrelated --me: single-user
+
+    def test_no_personal_settings_before_consent_and_no_member_no_writes(self):
+        st = os.path.join(self.base, "people", "sam", "settings.json")
+        with open(st) as f:
+            d = json.load(f)
+        d["goals"] = {"protein_g_per_kg": [1.6, 2.0]}
+        d["phases"] = [{"id": "baseline", "name": "Secret", "from": "2026-10-01"}]
+        with open(st, "w") as f:
+            json.dump(d, f)
+        data = bos.dashboard_data(self.ctx("sam"), "30")
+        self.assertNotIn("Secret", json.dumps(data))
+        self.assertIsNone(data["tabs"]["today"]["phase"])
+        hj = os.path.join(self.hh, "household.json")
+        with open(hj) as f:
+            hh = json.load(f)
+        hh["default_member"] = None
+        with open(hj, "w") as f:
+            json.dump(hh, f)
+        code, _, err = self.bos("log", "--dry-run", '{"type": "weight", "kg": 60}')
+        self.assertEqual(code, 2)
+        self.assertIn("--profile", err)
+        hh["members"].append({"id": "nested", "name": "N", "color": "red", "path": "people/sam/x", "consent": True})
+        self.assertTrue(bos.household_errors(hh))
+
+
+class TestHouseholdInit(InitBase):
+    def test_init_needs_member_flags_when_me_exists(self):
+        code, _, err = self.bos("household", "init")
+        self.assertEqual(code, 2)
+        self.assertIn("--member-id", err)
+        self.assertFalse(os.path.exists(os.path.join(self.hh, "household.json")))
+
+    def test_init_registers_me_and_moves_the_kitchen(self):
+        originals = {rel: self.read(self.me, rel) for rel in bos.SHARED_FILES}
+        code, out, err = self.bos("household", "init", "--name", "Test home", "--member-id", "alex",
+                                  "--member-name", "Alex", "--color", "green")
+        self.assertEqual(code, 0, err)
+        hh = json.loads(self.read(self.hh, "household.json"))
+        self.assertEqual(hh["name"], "Test home")
+        self.assertEqual(hh["default_member"], "alex")
+        self.assertEqual(hh["members"], [{"id": "alex", "name": "Alex", "color": "green", "path": "me", "consent": True}])
+        for rel, text in originals.items():
+            self.assertFalse(os.path.exists(os.path.join(self.me, rel)), rel)
+            self.assertEqual(self.read(self.hh, rel), text, rel)  # content preserved
+            self.assertIn("moved me/%s -> household/%s" % (rel, rel), out)
+        self.assertTrue(bos.is_own_repo(self.hh))
+        shared = json.loads(self.read(self.hh, "settings.json"))
+        self.assertEqual(shared["pantry"]["grace_days"]["best_before"], 7)
+        self.assertNotIn("goals", shared)  # personal settings stay personal
+        c = bos.Ctx(None, None, DEMO_TODAY, self.hh)
+        self.assertEqual((c.profile_id, c.me, c.consent), ("alex", self.me, True))
+        self.assertEqual(c.pantry_path, os.path.join(self.hh, "pantry", "pantry.jsonl"))
+        code, out, _ = self.bos("pantry", "--json")
+        self.assertEqual(len(json.loads(out)), 14)
+        code, out, _ = self.bos("household", "init")  # idempotent
+        self.assertEqual(code, 0)
+        self.assertEqual(len(json.loads(self.read(self.hh, "household.json"))["members"]), 1)
+
+    def test_init_never_overwrites_household_content(self):
+        os.makedirs(os.path.join(self.hh, "recipes"))
+        with open(os.path.join(self.hh, "recipes", "cookbook.jsonl"), "w") as f:
+            f.write('{"id": "keep"}\n')
+        os.makedirs(os.path.join(self.hh, "pantry"))
+        open(os.path.join(self.hh, "pantry", "shopping-list.md"), "w").close()  # empty: may be replaced
+        mine = self.read(self.me, "recipes", "cookbook.jsonl")
+        code, out, _ = self.bos("household", "init", "--member-id", "alex", "--member-name", "Alex")
+        self.assertEqual(code, 0)
+        self.assertIn("kept  me/recipes/cookbook.jsonl", out)
+        self.assertEqual(self.read(self.me, "recipes", "cookbook.jsonl"), mine)
+        self.assertEqual(self.read(self.hh, "recipes", "cookbook.jsonl"), '{"id": "keep"}\n')
+        self.assertTrue(self.read(self.hh, "pantry", "shopping-list.md"))
+        code, out, _ = self.bos("doctor")
+        self.assertIn("both household/recipes/cookbook.jsonl and me/recipes/cookbook.jsonl exist", out)
+
+
+class TestProfiles(InitBase):
+    def setUp(self):
+        super().setUp()
+        code, _, err = self.bos("household", "init", "--member-id", "alex", "--member-name", "Alex")
+        self.assertEqual(code, 0, err)
+
+    def test_add_creates_private_instance_without_consent(self):
+        code, out, err = self.bos("profile", "add", "louise", "--name", "Louise", "--color", "violet")
+        self.assertEqual(code, 0, err)
+        inst = os.path.join(self.tmp, "people", "louise")
+        st = json.loads(self.read(inst, "settings.json"))
+        self.assertEqual((st["language"], st["modules"]), ("en", []))
+        self.assertTrue(bos.is_own_repo(inst))
+        self.assertEqual(bos.git(["remote"], inst).stdout.strip(), "")
+        m = json.loads(self.read(self.hh, "household.json"))["members"][1]
+        self.assertEqual(m, {"id": "louise", "name": "Louise", "color": "violet", "path": "people/louise", "consent": False})
+        code, out, _ = self.bos("profile", "list")
+        self.assertIn("louise", out)
+        self.assertRegex(out, r"louise .*consent:no")
+        code, out, _ = self.bos("profile", "list", "--json")
+        self.assertEqual([x["initials"] for x in json.loads(out)["members"]], ["A", "L"])
+        code, _, _ = self.bos("profile", "add", "louise", "--name", "Again")
+        self.assertEqual(code, 2)
+        code, _, _ = self.bos("profile", "add", "kim", "--name", "Kim", "--language", "de")
+        self.assertEqual(json.loads(self.read(self.tmp, "people", "kim", "settings.json"))["language"], "de")
+        code, _, _ = self.bos("profile", "add", "bad", "--name", "Bad", "--path", "../outside")
+        self.assertEqual(code, 2)
+
+    def test_no_events_for_member_without_consent(self):
+        self.bos("profile", "add", "louise", "--name", "Louise")
+        inst = os.path.join(self.tmp, "people", "louise")
+        for cmd, ev in (("log", '{"type": "weight", "kg": 60}'),
+                        ("pantry-log", '{"type": "purchase", "items": [{"name": "milk", "qty": 1, "unit": "pcs"}]}')):
+            code, out, err = self.bos(cmd, ev, profile="louise")
+            self.assertEqual(code, 2, cmd)
+            self.assertIn("has not consented / not onboarded yet", err)
+        self.assertEqual(os.listdir(os.path.join(inst, "log")), [])
+        code, _, _ = self.bos("profile", "consent", "louise")
+        self.assertEqual(code, 0)
+        code, out, err = self.bos("log", '{"type": "weight", "kg": 60, "ts": "2026-10-13T08:00:00+02:00"}', profile="louise")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(os.path.exists(os.path.join(inst, "log", "2026", "2026-10.jsonl")))
+        self.bos("profile", "consent", "louise", "--revoke")
+        self.assertEqual(self.bos("log", '{"type": "weight", "kg": 61}', profile="louise")[0], 2)
+
+    def test_doctor_checks_every_member_and_household(self):
+        self.bos("profile", "add", "louise", "--name", "Louise")
+        bos.git(["init", "-q"], self.me)
+        code, out, _ = self.bos("doctor")
+        self.assertIn("household mode", out)
+        self.assertIn("household/ is its own git repository", out)
+        self.assertIn("household/ has no remote", out)
+        self.assertIn("people/louise/ (louise, no consent yet) is its own git repository", out)
+        self.assertIn("me/ (alex) has no remote", out)
+        bos.git(["remote", "add", "origin", "https://example.invalid/x.git"], os.path.join(self.tmp, "people", "louise"))
+        code, out, _ = self.bos("doctor")
+        self.assertIn("!!! people/louise/ (louise, no consent yet) HAS A GIT REMOTE", out)
+
+    def test_engine_ignores_people_and_household(self):
+        for d in ("people/", "household/", "people/x/log/2026/2026-10.jsonl", "household/server.json"):
+            self.assertEqual(bos.git(["check-ignore", "-q", d], ROOT).returncode, 0, d)
+        self.assertNotEqual(bos.git(["check-ignore", "-q", "examples/demo-household/people/sam/settings.json"],
+                                    ROOT).returncode, 0)
+
+
+class TestLanServer(TempHousehold):
+    def setUp(self):
+        super().setUp()
+        self.srv = bos.make_dashboard_server(self.ctx(), port=0, today=DEMO_TODAY)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.port = self.srv.server_address[1]
+        self.key_path = os.path.join(self.hh, "server.json")
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        super().tearDown()
+
+    def get(self, path, host=None, cookie=None):
+        import http.client
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        headers = {"Host": host or "127.0.0.1:%d" % self.port}
+        if cookie:
+            headers["Cookie"] = cookie
+        c.request("GET", path, headers=headers)
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        return r.status, {k.lower(): v for k, v in r.getheaders()}, body
+
+    def test_loopback_needs_no_key_and_serves_profiles(self):
+        code, h, body = self.get("/api/profiles")
+        self.assertEqual(code, 200)
+        p = json.loads(body)
+        self.assertEqual(p["default"], "alex")
+        self.assertEqual([(m["id"], m["color"], m["consent"], m["initials"]) for m in p["members"]],
+                         [("alex", "blue", True, "AD"), ("sam", "orange", False, "S")])
+        self.assertNotIn("path", p["members"][0])  # folder layout stays on the server
+        code, _, body = self.get("/api/data?profile=sam&days=14")
+        d = json.loads(body)
+        self.assertEqual((code, d["profile"]["id"], d["period"]["days_logged"]), (200, "sam", 0))
+        self.assertTrue(d["tabs"]["kitchen"]["pantry"])
+        code, _, body = self.get("/api/data?profile=alex&days=14")
+        self.assertGreater(json.loads(body)["period"]["days_logged"], 0)
+        self.assertEqual(json.loads(self.get("/api/data")[2])["profile"]["id"], "alex")
+        self.assertEqual(self.get("/api/data?profile=nobody")[0], 404)
+        self.assertEqual(self.get("/api/data?profile=../alex")[0], 404)
+        self.assertEqual(self.get("/api/review?profile=alex&file=2026-W41.md")[0], 200)
+        self.assertEqual(self.get("/api/review?profile=sam&file=2026-W41.md")[0], 404)
+        self.assertEqual(self.get("/api/review?profile=nobody&file=2026-W41.md")[0], 404)
+        self.assertEqual(self.get("/devices")[0], 200)
+        code, _, body = self.get("/api/devices")
+        self.assertEqual((code, json.loads(body)["key_set"], json.loads(body)["lan"]), (200, False, False))
+        code, h, body = self.get("/manifest.webmanifest")
+        self.assertEqual((code, h["content-type"]), (200, "application/manifest+json"))
+        self.assertEqual(json.loads(body)["start_url"], "/")
+        self.assertIn("manifest-src 'self'", h["content-security-policy"])
+        self.assertNotIn("access-control-allow-origin", h)
+
+    def test_other_clients_need_the_household_key(self):
+        key = bos.ensure_server_key(self.key_path)
+        self.assertEqual(os.stat(self.key_path).st_mode & 0o777, 0o600)
+        self.assertEqual(bos.ensure_server_key(self.key_path), key)  # stable until rotated
+        self.srv.is_local = lambda ip: False  # simulate a phone in the LAN
+        for path in ("/", "/api/data?days=14", "/api/profiles", "/app.js", "/icons/icon-192.png",
+                     "/manifest.webmanifest", "/?key=wrong", "/?key="):
+            code, h, body = self.get(path)
+            self.assertEqual(code, 401, path)
+            self.assertNotIn(b"pantry", body)
+        code, h, body = self.get("/")
+        self.assertIn("QR-Code scannen", body.decode())
+        self.assertIn("text/html", h["content-type"])
+        code, h, _ = self.get("/?key=" + key)
+        self.assertEqual((code, h["location"]), (302, "/"))
+        cookie = h["set-cookie"]
+        self.assertTrue(cookie.startswith("bos_key=%s;" % key))
+        for attr in ("HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=34560000"):
+            self.assertIn(attr, cookie)
+        good = "bos_key=" + key
+        self.assertEqual(self.get("/", cookie=good)[0], 200)
+        code, _, body = self.get("/api/data?profile=alex&days=14", cookie=good)
+        self.assertEqual((code, json.loads(body)["profile"]["id"]), (200, "alex"))
+        self.assertEqual(json.loads(self.get("/manifest.webmanifest", cookie=good)[2])["start_url"], "/?key=" + key)
+        for path in ("/devices", "/devices/", "/devices.html", "/devices%2Ehtml", "/api/devices", "/api/devices/"):
+            self.assertIn(self.get(path, cookie=good)[0], (403, 404), path)
+        self.assertEqual(self.get("/devices%2Ehtml", cookie=good)[0], 403)
+        for path in ("/Devices.html", "/devices.HTML", "/%2Fdevices.html"):
+            self.assertEqual(self.get(path, cookie=good)[0], 403, path)
+        for bad_neighbour in ("a=b c; " + good, 'x="; ' + good, good + "; y=z"):
+            self.assertEqual(self.get("/", cookie=bad_neighbour)[0], 200, bad_neighbour)
+        self.assertEqual(self.get("/", cookie="bos_key=" + key[:-1] + "x")[0], 401)
+        self.assertEqual(self.get("/", cookie='bos_key="unterminated')[0], 401)
+        self.assertEqual(self.get("/", host="evil.example:%d" % self.port, cookie=good)[0], 403)  # DNS rebinding
+        bos.ensure_server_key(self.key_path, rotate=True)
+        self.assertEqual(self.get("/", cookie=good)[0], 401)  # rotation takes effect without restart
+
+    def test_host_check_allows_this_machines_names(self):
+        p = self.port
+        for host in ("localhost:%d" % p, "127.0.0.1:%d" % p, "[::1]:%d" % p, "%s:%d" % (bos.local_hostnames()[0], p)):
+            self.assertEqual(self.get("/api/profiles", host=host)[0], 200, host)
+        for ip in bos.lan_ipv4s():
+            self.assertEqual(self.get("/api/profiles", host="%s:%d" % (ip, p))[0], 200, ip)
+        for host in ("bodyos.home:%d" % p, "localhost:1", "localhost", "evil.example:%d" % p, "a:b:%d" % p):
+            self.assertEqual(self.get("/api/profiles", host=host)[0], 403, host)
+        cfg = bos.load_server_config(self.key_path)
+        cfg["allowed_hosts"] = ["BodyOS.home"]
+        bos.write_json_file(self.key_path, cfg, mode=0o600)
+        self.assertEqual(self.get("/api/profiles", host="bodyos.home:%d" % p)[0], 200)
+
+    def test_rotate_key_cli_and_single_user_key_location(self):
+        code, out, _ = self.bos("dashboard", "--rotate-key")
+        self.assertEqual(code, 0)
+        k1 = bos.load_server_config(self.key_path)["key"]
+        self.bos("dashboard", "--rotate-key")
+        self.assertNotEqual(bos.load_server_config(self.key_path)["key"], k1)
+        single = bos.Ctx(os.path.join(self.base, "people", "alex"), self.data, DEMO_TODAY)
+        self.assertEqual(bos.server_json_path(single), os.path.join(self.data, "server.json"))
+        self.assertTrue(bos.is_loopback_ip("127.0.0.1") and bos.is_loopback_ip("::1")
+                        and bos.is_loopback_ip("::ffff:127.0.0.1"))
+        self.assertFalse(bos.is_loopback_ip("192.168.1.20") or bos.is_loopback_ip("garbage"))
+        links = bos.device_links("K" * 43, 8030)
+        self.assertTrue(links and links[0]["link"].endswith(":8030/?key=" + "K" * 43))
+
+    def test_single_user_profiles_endpoint(self):
+        me = os.path.join(self.base, "people", "alex")
+        srv = bos.make_dashboard_server(bos.Ctx(me, self.data, DEMO_TODAY), port=0, today=DEMO_TODAY)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            self.port, old = srv.server_address[1], self.port
+            p = json.loads(self.get("/api/profiles")[2])
+            self.assertEqual(([m["id"] for m in p["members"]], p["household"]), (["me"], None))
+            self.assertEqual(json.loads(self.get("/api/data?profile=me")[2])["profile"]["id"], "me")
+            self.assertEqual(self.get("/api/data?profile=alex")[0], 404)
+        finally:
+            self.port = old
+            srv.shutdown()
+            srv.server_close()
+
+
+class TestPwa(unittest.TestCase):
+    DASH = os.path.join(ROOT, "tools", "dashboard")
+
+    def test_icons_are_deterministic_and_committed(self):
+        sys.path.insert(0, self.DASH)
+        try:
+            import make_icons
+        finally:
+            sys.path.remove(self.DASH)
+        tmp = tempfile.mkdtemp(prefix="bos-icons-")
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                make_icons.main(["make_icons.py", tmp])
+            for name, size in make_icons.SIZES.items():
+                with open(os.path.join(tmp, name), "rb") as f:
+                    fresh = f.read()
+                with open(os.path.join(self.DASH, "icons", name), "rb") as f:
+                    self.assertEqual(f.read(), fresh, name)
+                self.assertEqual(fresh[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual(struct_unpack(fresh[16:24]), (size, size))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_manifest_meta_and_vendored_qr(self):
+        with open(os.path.join(self.DASH, "manifest.webmanifest")) as f:
+            man = json.load(f)
+        self.assertEqual((man["name"], man["short_name"], man["display"]), ("body-os", "body-os", "standalone"))
+        for icon in man["icons"]:
+            self.assertTrue(os.path.exists(os.path.join(self.DASH, icon["src"])), icon["src"])
+        with open(os.path.join(self.DASH, "index.html")) as f:
+            html = f.read()
+        for needle in ('rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials"',
+                       'rel="apple-touch-icon" href="icons/apple-touch-icon.png"', "viewport-fit=cover",
+                       'name="apple-mobile-web-app-capable"', 'name="apple-mobile-web-app-status-bar-style"',
+                       'name="theme-color" content="#f3f2ee" media="(prefers-color-scheme: light)"',
+                       'name="theme-color" content="#111110" media="(prefers-color-scheme: dark)"'):
+            self.assertIn(needle, html)
+        with open(os.path.join(self.DASH, "app.js")) as f:
+            self.assertNotIn("serviceWorker", f.read())
+        vendor = os.path.join(self.DASH, "vendor")
+        with open(os.path.join(vendor, "README.md")) as f:
+            readme = f.read()
+        with open(os.path.join(vendor, "qrcode.js"), "rb") as f:
+            self.assertIn(hashlib.sha256(f.read()).hexdigest(), readme)
+        self.assertTrue(os.path.exists(os.path.join(vendor, "QRCODE-LICENSE")))
+
+
+def struct_unpack(b):
+    import struct
+    return struct.unpack(">II", b)
+
+
+class TestService(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bos-svc-")
+        self.home = os.path.join(self.tmp, "home")
+        os.makedirs(self.home)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def svc(self, *argv, platform="darwin"):
+        me = os.path.join(self.tmp, "me")
+        data = os.path.join(self.tmp, "data")
+        with mock.patch.dict(os.environ, {"HOME": self.home}), mock.patch.object(bos.sys, "platform", platform):
+            return run("--me", me, "--data", data, "service", *argv)
+
+    def test_install_dry_run_prints_plist_and_writes_nothing(self):
+        import plistlib
+        code, out, err = self.svc("install", "--port", "8099", "--lan", "--dry-run")
+        self.assertEqual(code, 0, err)
+        plist_path = os.path.join(self.home, "Library", "LaunchAgents", "io.body-os.dashboard.plist")
+        self.assertIn("# would write " + plist_path, out)
+        self.assertFalse(os.path.exists(plist_path))
+        xml = out.split("\n", 1)[1].split("$ launchctl", 1)[0]
+        pl = plistlib.loads(xml.encode())
+        self.assertEqual(pl["Label"], "io.body-os.dashboard")
+        self.assertTrue(pl["RunAtLoad"] and pl["KeepAlive"])
+        self.assertEqual(pl["WorkingDirectory"], ROOT)
+        args = pl["ProgramArguments"]
+        self.assertEqual(args[0], sys.executable)
+        self.assertTrue(os.path.isabs(args[0]) and args[1] == os.path.join(ROOT, "tools", "bos.py"))
+        self.assertEqual(args[-4:], ["dashboard", "--port", "8099", "--lan"])
+        self.assertIn("--me", args)
+        log = os.path.join(self.tmp, "data", "dashboard.log")
+        self.assertEqual((pl["StandardOutPath"], pl["StandardErrorPath"]), (log, log))
+        self.assertIn("$ launchctl bootstrap gui/%d %s" % (os.getuid(), plist_path), out)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "data")))
+        code, out, _ = self.svc("uninstall", "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("$ launchctl bootout gui/%d/io.body-os.dashboard" % os.getuid(), out)
+        code, out, _ = self.svc("status", "--dry-run")
+        self.assertIn("not installed", out)
+
+    def test_non_macos_is_a_clear_error(self):
+        code, _, err = self.svc("install", "--dry-run", platform="linux")
+        self.assertEqual(code, 2)
+        self.assertIn("macOS", err)
 
 
 if __name__ == "__main__":

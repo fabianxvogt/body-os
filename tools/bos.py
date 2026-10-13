@@ -2,18 +2,22 @@
 """bos - body-os command line tool (Python 3.9+, standard library only).
 
 Spec: docs/DATA_FORMAT.md and docs/ARCHITECTURE.md. Personal data lives in me/ (or --me DIR);
-derived databases live in data/ (or --data DIR). Run `bos.py <command> -h` for details.
+in household mode in each member's folder (--profile ID), with the shared kitchen in household/
+(or --household DIR). Derived databases live in data/ (or --data DIR). Run `bos.py <command> -h` for details.
 """
 
 import argparse
 import collections
 import datetime as dt
 import hashlib
+import hmac
 import io
+import ipaddress
 import json
 import os
 import re
 import secrets
+import socket
 import shutil
 import sqlite3
 import statistics
@@ -160,21 +164,174 @@ def load_events(path):
     return [obj for _, obj, err in read_jsonl(path) if obj is not None]
 
 
-class Ctx:
-    """Resolved paths and settings for one invocation."""
+# --------------------------------------------------------------------------------------------
+# Household mode (docs/ARCHITECTURE.md): household/household.json lists members whose instance
+# folders hold personal data; household/ holds the shared kitchen (pantry, cookbook, shopping list).
+# --------------------------------------------------------------------------------------------
 
-    def __init__(self, me=None, data=None, today=None):
+MEMBER_COLORS = ("blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red")
+PROFILE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+SHARED_FILES = ("pantry/pantry.jsonl", "recipes/cookbook.jsonl", "pantry/shopping-list.md")
+SHARED_SETTINGS = ("household", "kitchen", "pantry", "cooking")
+SINGLE_PROFILE = "me"
+DEFAULT_HOUSEHOLD = os.path.join(ROOT, "household")  # module-level so tests can point it elsewhere
+
+
+def read_json_file(path, default=None):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def write_json_file(path, obj, mode=None):
+    """Write JSON atomically (temp file + rename); mode e.g. 0o600 for secrets."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode if mode is not None else 0o644)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
+    if mode is not None:
+        os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def initials(name):
+    parts = [p for p in re.split(r"[\s._-]+", str(name or "").strip()) if p]
+    if not parts:
+        return "?"
+    if len(parts) == 1:
+        return parts[0][:1].upper()
+    return (parts[0][:1] + parts[-1][:1]).upper()
+
+
+def member_path_ok(p):
+    """Instance paths are relative, normalised and never point into household/ or hidden dirs."""
+    if not isinstance(p, str) or not p.strip() or p.startswith("/") or "\\" in p or ":" in p:
+        return False
+    segs = p.strip("/").split("/")
+    return (all(s and s not in (".", "..") and not s.startswith(".") for s in segs)
+            and segs[0].lower() not in ("household", "data", "tools", "examples", "templates"))
+
+
+def household_errors(hh):
+    if not isinstance(hh, dict):
+        return ["household.json is not a JSON object"]
+    members = hh.get("members")
+    if not isinstance(members, list):
+        return ["'members' must be a list"]
+    errs, ids, paths = [], set(), set()
+    for i, m in enumerate(members):
+        if not isinstance(m, dict):
+            errs.append("members[%d] is not an object" % i)
+            continue
+        mid = m.get("id")
+        if not isinstance(mid, str) or not PROFILE_ID_RE.match(mid):
+            errs.append("members[%d].id must match %s" % (i, PROFILE_ID_RE.pattern))
+        elif mid in ids:
+            errs.append("duplicate member id %r" % mid)
+        ids.add(mid)
+        if not isinstance(m.get("name"), str) or not m["name"].strip():
+            errs.append("members[%d].name missing" % i)
+        if m.get("color") not in MEMBER_COLORS:
+            errs.append("members[%d].color must be one of %s" % (i, "/".join(MEMBER_COLORS)))
+        if not member_path_ok(m.get("path")):
+            errs.append("members[%d].path must be a relative folder like people/<id>" % i)
+        elif any(m["path"].strip("/") == q or m["path"].strip("/").startswith(q + "/") or q.startswith(
+                m["path"].strip("/") + "/") for q in paths):
+            errs.append("member path %r overlaps another member's folder" % m["path"])
+        else:
+            paths.add(m["path"].strip("/"))
+        if not isinstance(m.get("consent"), bool):
+            errs.append("members[%d].consent must be true/false" % i)
+    dm = hh.get("default_member")
+    if dm is not None and dm not in ids:
+        errs.append("default_member %r is not a member" % dm)
+    return errs
+
+
+def merge_settings(member, shared):
+    """Member settings with the household's shared keys on top (household wins for the kitchen)."""
+    s = dict(member)
+    for k in SHARED_SETTINGS:
+        if k in shared:
+            s[k] = shared[k]
+    if isinstance(shared.get("costs"), dict):
+        s["costs"] = dict(member.get("costs") if isinstance(member.get("costs"), dict) else {}, **shared["costs"])
+    if shared.get("language"):
+        s["language"] = shared["language"]
+    if shared.get("timezone") and not member.get("timezone"):
+        s["timezone"] = shared["timezone"]
+    return s
+
+
+def _same_path(a, b):
+    return os.path.realpath(a) == os.path.realpath(b)
+
+
+class Ctx:
+    """Resolved paths and settings for one invocation.
+
+    Single-user: me/ (or --me DIR) holds everything. Household mode (household/household.json
+    exists, or --household DIR): the profile's instance folder holds personal data, household/
+    the shared kitchen. Member paths are relative to the folder that contains household/ (the
+    engine root). An explicit --me without --household stays single-user."""
+
+    def __init__(self, me=None, data=None, today=None, household=None, profile=None):
         self.root = ROOT
-        self.me = os.path.abspath(me) if me else os.path.join(ROOT, "me")
+        self.opts = {"me": me, "data": data, "today": today, "household": household}
         self.data = os.path.abspath(data) if data else os.path.join(ROOT, "data")
-        self.settings = {}
-        sp = os.path.join(self.me, "settings.json")
-        if os.path.exists(sp):
-            try:
-                with open(sp, encoding="utf-8") as f:
-                    self.settings = json.load(f) or {}
-            except (OSError, json.JSONDecodeError):
-                self.settings = {}
+        if household:
+            hdir = os.path.abspath(household)
+        elif me:
+            # an explicit --me stays single-user unless it is a registered member of <repo>/household
+            # (then the consent gate and the shared kitchen apply as with --profile)
+            dflt = DEFAULT_HOUSEHOLD
+            hh = read_json_file(os.path.join(dflt, "household.json"))
+            hdir = dflt if not household_errors(hh) and any(_same_path(
+                os.path.join(os.path.dirname(dflt), *m["path"].strip("/").split("/")), me) for m in hh["members"]) else None
+        else:
+            hdir = DEFAULT_HOUSEHOLD
+        self.household_dir = hdir
+        self.base = os.path.dirname(hdir) if hdir else ROOT
+        self.household = None
+        if hdir and os.path.exists(os.path.join(hdir, "household.json")):
+            hh = read_json_file(os.path.join(hdir, "household.json"))
+            errs = household_errors(hh)
+            if errs:
+                raise BosError("invalid %s: %s" % (os.path.join(hdir, "household.json"), "; ".join(errs)))
+            self.household = hh
+        self.member = None
+        if self.household:
+            members = self.household["members"]
+            if profile:
+                self.member = next((m for m in members if m["id"] == profile), None)
+                if self.member is None:
+                    raise BosError("unknown profile %r - see `bos.py profile list`" % profile)
+                if me and not _same_path(me, self.member_dir(self.member)):
+                    raise BosError("--me and --profile point to different folders")
+            elif me:
+                self.member = next((m for m in members if _same_path(self.member_dir(m), me)), None)
+            else:
+                dm = self.household.get("default_member")
+                self.member = next((m for m in members if (m["id"] == dm if dm else m["path"].strip("/") == "me")), None)
+            self.me = self.member_dir(self.member) if self.member else (
+                os.path.abspath(me) if me else os.path.join(self.base, "me"))
+        else:
+            if profile and profile != SINGLE_PROFILE:
+                raise BosError("no household (household/household.json) - --profile %r needs "
+                               "`bos.py household init` first" % profile)
+            self.me = os.path.abspath(me) if me else os.path.join(self.base, "me")
+        ms = read_json_file(os.path.join(self.me, "settings.json"), {})
+        self.member_settings = ms if isinstance(ms, dict) else {}
+        hs = read_json_file(os.path.join(hdir, "settings.json"), {}) if self.household else {}
+        self.household_settings = hs if isinstance(hs, dict) else {}
+        if self.member and not self.member["consent"]:  # nothing personal before consent
+            ms = {k: self.member_settings[k] for k in ("language", "timezone") if k in self.member_settings}
+        else:
+            ms = self.member_settings
+        self.settings = merge_settings(ms, self.household_settings)
         self.tz = None
         tzname = self.settings.get("timezone") if isinstance(self.settings, dict) else None
         if tzname:
@@ -200,17 +357,73 @@ class Ctx:
         cfg = (self.settings.get("pantry") or {}).get("grace_days") or {}
         return cfg.get(date_kind, GRACE_DEFAULT.get(date_kind, 0))
 
+    def member_dir(self, m):
+        return os.path.join(self.base, *m["path"].strip("/").split("/"))
+
+    @property
+    def consent(self):
+        """False only for a household member who has not consented / not been onboarded yet."""
+        if self.member:
+            return bool(self.member["consent"])
+        return not self.household  # household mode without a selected member: nothing personal
+
+    @property
+    def profile_id(self):
+        return self.member["id"] if self.member else (None if self.household else SINGLE_PROFILE)
+
+    def members(self):
+        """Public member list; single-user mode yields one synthetic member 'me'."""
+        if self.household:
+            return [{"id": m["id"], "name": m["name"], "color": m["color"], "consent": m["consent"],
+                     "initials": initials(m["name"]), "path": m["path"]} for m in self.household["members"]]
+        de = str(self.settings.get("language") or "").startswith("de")
+        name = self.settings.get("display_name") or ("Ich" if de else "Me")
+        color = self.settings.get("color") if self.settings.get("color") in MEMBER_COLORS else "blue"
+        return [{"id": SINGLE_PROFILE, "name": name, "color": color, "consent": True, "initials": initials(name),
+                 "path": os.path.relpath(self.me, self.base)}]
+
+    def profile_json(self):
+        pid = self.profile_id
+        m = next((m for m in self.members() if m["id"] == pid), None)
+        return {k: m[k] for k in ("id", "name", "color", "consent", "initials")} if m else None
+
+    def for_profile(self, pid=None):
+        """A fresh Ctx for another member (re-reads household.json and settings)."""
+        o = self.opts
+        if pid is None:
+            return Ctx(o["me"], o["data"], o["today"], o["household"])
+        if self.household:
+            return Ctx(None, o["data"], o["today"], self.household_dir, pid)
+        return Ctx(self.me, o["data"], o["today"], o["household"], pid)
+
+    def shared_path(self, rel):
+        """Kitchen files: household/ when it has them (or the instance lacks them), else the instance."""
+        mine = os.path.join(self.me, *rel.split("/"))
+        if not self.household:
+            return mine
+        shared = os.path.join(self.household_dir, *rel.split("/"))
+        return shared if os.path.exists(shared) or not os.path.exists(mine) else mine
+
+    def rel(self, path):
+        """Path for messages: relative to the instance, or to the engine root when outside it."""
+        inside = os.path.realpath(path).startswith(os.path.realpath(self.me) + os.sep)
+        return os.path.relpath(path, self.me if inside else self.base)
+
     @property
     def log_dir(self):
         return os.path.join(self.me, "log")
 
     @property
     def pantry_path(self):
-        return os.path.join(self.me, "pantry", "pantry.jsonl")
+        return self.shared_path("pantry/pantry.jsonl")
 
     @property
     def cookbook_path(self):
-        return os.path.join(self.me, "recipes", "cookbook.jsonl")
+        return self.shared_path("recipes/cookbook.jsonl")
+
+    @property
+    def shopping_list_path(self):
+        return self.shared_path("pantry/shopping-list.md")
 
     def log_files(self):
         out = []
@@ -550,7 +763,18 @@ def append_lines(path, events):
             f.write(dumps(ev) + "\n")
 
 
+def require_consent(ctx):
+    if ctx.household and not ctx.member:
+        raise BosError("household mode: no member selected for %s - pass --profile ID (bos.py profile list) "
+                       "or set default_member in household.json" % ctx.me)
+    if not ctx.consent:
+        raise BosError("member %r has not consented / not onboarded yet - nothing written. Run their own "
+                       "interview first (interview/README.md), then `bos.py profile consent %s`"
+                       % (ctx.member["name"], ctx.member["id"]))
+
+
 def cmd_log(ctx, args):
+    require_consent(ctx)
     taken = {e.get("id") for e in ctx.log_events()}
     events, problems = [], []
     for i, raw in enumerate(read_input(args)):
@@ -577,6 +801,7 @@ def cmd_log(ctx, args):
 
 
 def cmd_pantry_log(ctx, args):
+    require_consent(ctx)
     existing = load_events(ctx.pantry_path)
     taken = {e.get("id") for e in existing}
     known = {}
@@ -610,8 +835,8 @@ def cmd_pantry_log(ctx, args):
         append_lines(ctx.pantry_path, events)
     for ev in events:
         print(dumps(ev))
-    print("%s %d event(s) -> pantry/pantry.jsonl" % ("would append" if args.dry_run else "appended", len(events)),
-          file=sys.stderr)
+    print("%s %d event(s) -> %s" % ("would append" if args.dry_run else "appended", len(events),
+                                    ctx.rel(ctx.pantry_path)), file=sys.stderr)
     return 0
 
 
@@ -622,7 +847,7 @@ def cmd_pantry_log(ctx, args):
 def validate_all(ctx):
     """Return list of (relative path, line, message)."""
     problems = []
-    rel = lambda p: os.path.relpath(p, ctx.me)
+    rel = ctx.rel
     ids = {}
     for path in ctx.log_files():
         m = re.search(r"(\d{4})-(\d{2})\.jsonl$", path)
@@ -1302,9 +1527,10 @@ DASHBOARD_PERIODS = ("14", "30", "90", "all")
 DASHBOARD_TABS = ("today", "body", "nutrition", "kitchen", "sleep", "substances", "training", "journal")
 DASHBOARD_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                    ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
-                   ".ico": "image/x-icon", ".woff2": "font/woff2"}
+                   ".ico": "image/x-icon", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json"}
 DASHBOARD_CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-                 "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                 "connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; "
+                 "frame-ancestors 'none'")
 DASHBOARD_PANTRY_FIELDS = ("item_id", "name", "status", "days_left", "expires", "date_kind", "check_hint",
                            "storage", "remaining", "unit", "opened", "expires_est", "category")
 DASHBOARD_TRAINING_PLAN = 4
@@ -1693,7 +1919,8 @@ def dashboard_data(ctx, days="30"):
         raise BosError("days must be one of %s" % "/".join(DASHBOARD_PERIODS))
     settings = ctx.settings if isinstance(ctx.settings, dict) else {}
     to = ctx.today
-    events = [e for e in ctx.log_events() if event_day(e) is not None and event_day(e) <= to]
+    # a member without consent gets no personal data at all (the kitchen stays household-wide)
+    events = [e for e in (ctx.log_events() if ctx.consent else []) if event_day(e) is not None and event_day(e) <= to]
     if key == "all":
         seen = [event_day(e) for e in events]
         frm = min(seen) if seen else to - dt.timedelta(days=13)
@@ -1809,7 +2036,7 @@ def dashboard_data(ctx, days="30"):
         if st:
             measure_due.append(dict(st, metric=metric, rule=str(rule),
                                     last=max(mdays).isoformat() if mdays else None))
-    reviews = review_files(ctx.me)
+    reviews = review_files(ctx.me) if ctx.consent else []
     review_due = None
     rv_day = str(_dict(settings.get("reviews")).get("weekly") or "").lower()[:3]
     if rv_day in WEEKDAYS and WEEKDAYS[to.weekday()] == rv_day:
@@ -1996,7 +2223,7 @@ def dashboard_data(ctx, days="30"):
     tab_kitchen = {
         "pantry": pantry, "purchases": purchases, "waste": waste, "eating_out": eating_out,
         "currency": cs["currency"],
-        "shopping_list": _read_text(os.path.join(ctx.me, "pantry", "shopping-list.md")),
+        "shopping_list": _read_text(ctx.shopping_list_path), "shared": bool(ctx.household),
         "cookbook": [{"day": e["ts"][:10], "name": e.get("name"), "cuisine": e.get("cuisine"),
                       "simplicity": e.get("simplicity"), "nutrition_score": e.get("nutrition_score"),
                       "rating": e.get("rating"), "status": e.get("status"), "skill": e.get("skill")}
@@ -2204,7 +2431,7 @@ def dashboard_data(ctx, days="30"):
                                   "pace_min_km": _r(mins / km) if is_num(km) and km > 0 and is_num(mins) and mins > 0 else None})
     plan_doc = None
     try:
-        raw = _read_text(os.path.join(ctx.me, "plans", "training.json"))
+        raw = _read_text(os.path.join(ctx.me, "plans", "training.json")) if ctx.consent else None
         plan_doc = json.loads(raw) if raw else None
     except ValueError:
         plan_doc = None
@@ -2249,6 +2476,10 @@ def dashboard_data(ctx, days="30"):
         "period": {"key": key, "from": frm.isoformat(), "to": to.isoformat(), "days": len(days_),
                    "days_logged": sum(1 for r in day_rows if r["logged"])},
         "language": settings.get("language") or "en", "modules": modules,
+        "profile": ctx.profile_json(),
+        "household": ({"name": ctx.household.get("name"),
+                       "members": [{k: m[k] for k in ("id", "name", "color", "consent", "initials")}
+                                   for m in ctx.members()]} if ctx.household else None),
         "days": day_rows, "previous": previous,
         "tabs": {"today": tab_today, "body": tab_body, "nutrition": tab_nutrition, "kitchen": tab_kitchen,
                  "sleep": tab_sleep, "substances": tab_substances, "training": tab_training, "journal": tab_journal},
@@ -2266,17 +2497,121 @@ def bp_category(sys_, dia):
     return "optimal"
 
 
-def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="127.0.0.1"):
-    """Read-only HTTP server: static files from tools/dashboard/, GET /api/data?days=N and
-    GET /api/review?file=YYYY-Www.md|YYYY-MM.md (markdown of me/reviews/, whitelisted names only).
+KEY_COOKIE = "bos_key"
+KEY_COOKIE_MAX_AGE = 400 * 86400
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+LOCAL_ONLY_PATHS = ("/devices", "/devices.html", "/api/devices")
+UNAUTHORIZED_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">
+<title>body-os</title><style>body{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:30em;margin:12vh auto;
+padding:0 20px;color:#52514e}h1{font-size:20px;color:inherit}@media(prefers-color-scheme:dark){body{background:#111110;
+color:#c3c2b7}}</style></head><body><h1>body-os &middot; kein Zugriff</h1>
+<p>Diesen Link vom Mac aus &ouml;ffnen / QR-Code scannen: auf dem Mac <b>http://127.0.0.1:PORT/devices</b> aufrufen
+und den QR-Code mit diesem Ger&auml;t scannen.</p>
+<p lang="en">No access. Open the device link from the Mac, or scan the QR code shown at
+<b>http://127.0.0.1:PORT/devices</b> on the Mac.</p></body></html>"""
 
-    Data is rebuilt from me/ on every request. Requests whose Host header is not this loopback
-    address are refused (DNS-rebinding guard). Port 0 picks a free port (tests)."""
+
+def server_json_path(ctx):
+    """Household key file: household/server.json, or <data>/server.json in single-user mode."""
+    return os.path.join(ctx.household_dir, "server.json") if ctx.household else os.path.join(ctx.data, "server.json")
+
+
+def load_server_config(path):
+    cfg = read_json_file(path, {})
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _valid_key(k):
+    return isinstance(k, str) and len(k) >= 32 and re.match(r"^[A-Za-z0-9_-]+$", k) is not None
+
+
+def ensure_server_key(path, rotate=False):
+    """Return the household key, creating (or with rotate=True replacing) it. File mode 0600."""
+    cfg = load_server_config(path)
+    if rotate or not _valid_key(cfg.get("key")):
+        cfg["schema"] = 1
+        cfg["key"] = secrets.token_urlsafe(32)
+        cfg["created"] = dt.datetime.now().astimezone().replace(microsecond=0).isoformat()
+        cfg.setdefault("allowed_hosts", [])
+        write_json_file(path, cfg, mode=0o600)
+    return cfg["key"]
+
+
+def is_loopback_ip(ip):
+    try:
+        a = ipaddress.ip_address(str(ip).split("%")[0])
+    except ValueError:
+        return False
+    if getattr(a, "ipv4_mapped", None):
+        a = a.ipv4_mapped
+    return a.is_loopback
+
+
+def local_hostnames():
+    """mDNS names of this machine, primary first: <LocalHostName>.local (macOS scutil), hostname."""
+    lhn = None
+    if sys.platform == "darwin":
+        try:
+            r = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True, timeout=3)
+            lhn = r.stdout.strip() if r.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            lhn = None
+    hn = socket.gethostname().strip().lower()
+    short = hn.split(".")[0]
+    out = []
+    for n in ((lhn or short).lower() + ".local", hn, short + ".local"):
+        if n and n not in out:
+            out.append(n)
+    return out
+
+
+def lan_ipv4s():
+    """Non-loopback IPv4 address of the default route (UDP connect sends no packet)."""
+    out = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("192.0.2.1", 9))  # TEST-NET-1: only selects the outgoing interface
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        if ip and not ip.startswith("127.") and ip != "0.0.0.0":
+            out.append(ip)
+    except OSError:
+        pass
+    return out
+
+
+def device_links(key, port):
+    hosts = local_hostnames()[:1] + lan_ipv4s()
+    return [{"host": h, "url": "http://%s:%d/" % (h, port), "link": "http://%s:%d/?key=%s" % (h, port, key)}
+            for h in hosts]
+
+
+def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="127.0.0.1", is_local=None):
+    """Read-only HTTP server for tools/dashboard/ and its JSON API.
+
+    GET /api/profiles, /api/data?profile=ID&days=N, /api/review?profile=ID&file=YYYY-Www.md|YYYY-MM.md.
+    Data is rebuilt from the instance/household folders on every request.
+
+    Access: loopback clients need no key. Any other client needs the household key (server.json),
+    as cookie bos_key or once via GET /?key=... (sets the cookie, redirects to /). /devices (QR code
+    and device link) is loopback-only. Requests whose Host header is not a name of this machine are
+    refused (DNS-rebinding guard). `is_local(ip)` decides what counts as loopback (injectable for
+    tests; also settable as srv.is_local). Port 0 picks a free port (tests)."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from urllib.parse import parse_qs, unquote, urlsplit
 
     root = os.path.realpath(DASHBOARD_DIR)
-    me, data = ctx.me, ctx.data
+    key_path = server_json_path(ctx)
+    lan_names = {"names": [], "at": 0.0}  # scutil + UDP probe; refreshed on a miss after 30 s (DHCP changes)
+
+    def fresh(profile=None):
+        return ctx.for_profile(profile) if profile else ctx.for_profile(None)
+
+    def server_cfg():
+        return load_server_config(key_path)
 
     class Handler(BaseHTTPRequestHandler):
         def version_string(self):
@@ -2285,7 +2620,7 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
         def log_message(self, fmt, *a):  # quiet; errors are visible in the browser
             pass
 
-        def _send(self, code, body, ctype, cache="no-store"):
+        def _send(self, code, body, ctype, cache="no-store", headers=()):
             if isinstance(body, str):
                 body = body.encode("utf-8")
             self.send_response(code)
@@ -2295,6 +2630,8 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", DASHBOARD_CSP)
+            for k, v in headers:
+                self.send_header(k, v)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
@@ -2302,33 +2639,108 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
         def _json(self, code, obj):
             self._send(code, json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8")
 
+        def _redirect(self, cookie_key=None):
+            headers = [("Location", "/")]
+            if cookie_key:
+                headers.append(("Set-Cookie", "%s=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d"
+                                % (KEY_COOKIE, cookie_key, KEY_COOKIE_MAX_AGE)))
+            self._send(302, b"", "text/plain; charset=utf-8", headers=headers)
+
+        def _unauthorized(self):
+            self._send(401, UNAUTHORIZED_HTML.replace("PORT", str(self.server.server_address[1])),
+                       "text/html; charset=utf-8")
+
         def _host_ok(self):
             hostport = (self.headers.get("Host") or "").strip().lower()
-            name, _, p = hostport.rpartition(":")
-            return name in ("127.0.0.1", "localhost") and p == str(self.server.server_address[1])
+            m = re.match(r"^(\[[0-9a-f:.]+\]|[^:\[\]/]+)(?::(\d+))?$", hostport)
+            if not m:
+                return False
+            name, p = m.group(1), m.group(2) or "80"
+            if p != str(self.server.server_address[1]):
+                return False
+            if name in LOOPBACK_HOSTS:
+                return True
+            extra = [str(h).lower() for h in server_cfg().get("allowed_hosts") or [] if isinstance(h, str)]
+            if name in extra:
+                return True
+            if name in lan_names["names"]:
+                return True
+            import time
+            if time.monotonic() - lan_names["at"] > 30 or not lan_names["at"]:
+                lan_names["names"], lan_names["at"] = local_hostnames() + lan_ipv4s(), time.monotonic()
+            return name in lan_names["names"]
+
+        def _cookie_key(self):
+            # by hand: one malformed foreign cookie (cookies are not port-isolated) must not hide ours
+            for part in ";".join(self.headers.get_all("Cookie") or []).split(";"):
+                name, sep, value = part.strip().partition("=")
+                if sep and name.strip() == KEY_COOKIE:
+                    return value.strip().strip('"')
+            return None
 
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, "forbidden host", "text/plain; charset=utf-8")
             parts = urlsplit(self.path)
-            if parts.path == "/api/data":
-                qs = parse_qs(parts.query)
-                days = qs.get("days", [default_days])[0]
-                if days not in DASHBOARD_PERIODS:
-                    return self._json(400, {"error": "days must be one of %s" % "/".join(DASHBOARD_PERIODS)})
+            qs = parse_qs(parts.query)
+            local = bool(self.server.is_local(self.client_address[0]))
+            key = server_cfg().get("key")
+            key = key if _valid_key(key) else None
+            if parts.path == "/" and "key" in qs:  # one-time device link: set cookie, strip the key
+                given = qs["key"][0]
+                if key and hmac.compare_digest(given.encode("utf-8"), key.encode("utf-8")):
+                    return self._redirect(key)
+                return self._redirect() if local else self._unauthorized()
+            if not local:
+                given = self._cookie_key()
+                if not (key and given and hmac.compare_digest(given.encode("utf-8"), key.encode("utf-8"))):
+                    return self._unauthorized()
+                norm = "/" + "/".join(x for x in unquote(parts.path).lower().split("/") if x)
+                if norm in LOCAL_ONLY_PATHS:
+                    return self._send(403, "only on this computer", "text/plain; charset=utf-8")
+            if parts.path == "/api/profiles":
+                c = fresh()
+                return self._json(200, {"household": ({"name": c.household.get("name")} if c.household else None),
+                                        "members": [{k: m[k] for k in ("id", "name", "color", "consent", "initials")}
+                                                    for m in c.members()],
+                                        "default": c.profile_id, "language": c.settings.get("language") or "en"})
+            if parts.path in ("/api/data", "/api/review"):
+                profile = qs.get("profile", [None])[0]
                 try:
-                    return self._json(200, dashboard_data(Ctx(me, data, today), days))
-                except Exception as e:  # report, never crash the server
-                    return self._json(500, {"error": "%s: %s" % (type(e).__name__, e)})
-            if parts.path == "/api/review":
-                name = parse_qs(parts.query).get("file", [""])[0]
+                    base = fresh()
+                    if profile is not None and profile not in [m["id"] for m in base.members()]:
+                        return self._json(404, {"error": "unknown profile"})
+                    c = fresh(profile)
+                except BosError as e:
+                    return self._json(500, {"error": str(e)})
+                if parts.path == "/api/data":
+                    days = qs.get("days", [default_days])[0]
+                    if days not in DASHBOARD_PERIODS:
+                        return self._json(400, {"error": "days must be one of %s" % "/".join(DASHBOARD_PERIODS)})
+                    try:
+                        return self._json(200, dashboard_data(c, days))
+                    except Exception as e:  # report, never crash the server
+                        return self._json(500, {"error": "%s: %s" % (type(e).__name__, e)})
+                name = qs.get("file", [""])[0]
                 if not REVIEW_FILE_RE.match(name):
                     return self._json(400, {"error": "file must look like YYYY-Www.md or YYYY-MM.md"})
-                text = review_text(me, name)
+                text = review_text(c.me, name) if c.consent else None
                 if text is None:
                     return self._json(404, {"error": "no such review"})
                 return self._json(200, {"file": name, "text": text})
+            if parts.path == "/api/devices":
+                port_ = self.server.server_address[1]
+                lan = self.server.server_address[0] not in ("127.0.0.1", "::1", "localhost")
+                return self._json(200, {"lan": lan, "port": port_, "key_set": bool(key),
+                                        "links": device_links(key, port_) if key else []})
+            if parts.path == "/manifest.webmanifest":
+                man = read_json_file(os.path.join(root, "manifest.webmanifest"), {})
+                if not local and key:  # home-screen apps may not share Safari's cookies: carry the key
+                    man["start_url"] = "/?key=" + key
+                return self._send(200, json.dumps(man, ensure_ascii=False), DASHBOARD_TYPES[".webmanifest"])
             path = unquote(parts.path)
+            if path in ("/devices", "/devices/"):
+                path = "/devices.html"
             segs = [s for s in path.split("/") if s]
             if ("\\" in path or "\x00" in path or any(s.startswith(".") for s in segs)):
                 return self._send(404, "not found", "text/plain; charset=utf-8")
@@ -2341,18 +2753,39 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
 
         do_HEAD = do_GET
 
-    return ThreadingHTTPServer((host, port), Handler)
+    srv = ThreadingHTTPServer((host, port), Handler)
+    srv.is_local = is_local or is_loopback_ip
+    return srv
 
 
 def cmd_dashboard(ctx, args):
     if not os.path.isdir(ctx.me):
         print("note: no instance folder at %s yet - the dashboard will be empty" % ctx.me, file=sys.stderr)
+    kpath = server_json_path(ctx)
+    if args.rotate_key:
+        ensure_server_key(kpath, rotate=True)
+        print("household key rotated (%s) - every phone/tablet must open the new device link once" % kpath)
+        if not args.lan:
+            print("start `bos.py dashboard --lan` (or restart the service) and open /devices on this computer")
+            return 0
+    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    key = ensure_server_key(kpath) if args.lan else None
     try:
-        srv = make_dashboard_server(ctx, args.port, args.days, today=args.today)
+        srv = make_dashboard_server(ctx, args.port, args.days, today=args.today, host=host)
     except OSError as e:
-        raise BosError("cannot listen on 127.0.0.1:%d (%s)" % (args.port, e))
-    print("dashboard: http://127.0.0.1:%d/  (localhost only, read-only, Ctrl+C to stop)" % srv.server_address[1],
-          flush=True)
+        raise BosError("cannot listen on %s:%d (%s)" % (host, args.port, e))
+    port = srv.server_address[1]
+    print("dashboard: http://127.0.0.1:%d/  (read-only, Ctrl+C to stop)" % port, flush=True)
+    if args.lan:
+        links = device_links(key, port)
+        print("LAN:       " + "   ".join(l["url"] for l in links))
+        if links and sys.stdout.isatty():  # never write the key into a log file (service mode)
+            print("device link (open once per phone/tablet; keep it private - it grants access to all profiles):")
+            print("           " + links[0]["link"])
+        print("QR code:   open http://127.0.0.1:%d/devices on this computer" % port)
+        print("note: macOS may ask whether Python may accept incoming network connections - allow it.", flush=True)
+    else:
+        print("           localhost only; add --lan to reach it from phones in your home network", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -2377,31 +2810,324 @@ def is_own_repo(path):
     return r.returncode == 0 and os.path.realpath(r.stdout.strip()) == os.path.realpath(path)
 
 
-def cmd_init(ctx, args):
-    tpl = os.path.join(ctx.root, "templates", "me")
-    os.makedirs(ctx.me, exist_ok=True)
-    copied = 0
+def init_instance(dest, overrides=None):
+    """Copy missing templates/me files into dest and create the standard folders. If settings.json
+    is created here, `overrides` are applied to it. Returns the number of copied files."""
+    tpl = os.path.join(ROOT, "templates", "me")
+    os.makedirs(dest, exist_ok=True)
+    copied, new_settings = 0, False
     if os.path.isdir(tpl):
         for base, _, files in os.walk(tpl):
-            dst_dir = os.path.join(ctx.me, os.path.relpath(base, tpl))
+            dst_dir = os.path.join(dest, os.path.relpath(base, tpl))
             os.makedirs(dst_dir, exist_ok=True)
             for f in files:
                 dst = os.path.join(dst_dir, f)
                 if not os.path.exists(dst):
                     shutil.copy2(os.path.join(base, f), dst)
                     copied += 1
+                    new_settings = new_settings or os.path.realpath(dst) == os.path.realpath(
+                        os.path.join(dest, "settings.json"))
     for sub in ("log", "pantry", "recipes", "plans", "reviews", "doctor", "inbox"):
-        os.makedirs(os.path.join(ctx.me, sub), exist_ok=True)
+        os.makedirs(os.path.join(dest, sub), exist_ok=True)
+    if new_settings and overrides:
+        sp = os.path.join(dest, "settings.json")
+        st = read_json_file(sp, {})
+        st.update(overrides)
+        write_json_file(sp, st)
+    return copied
+
+
+def git_init_private(path, label):
+    if is_own_repo(path):
+        print("%s is already a git repository" % label)
+        return
+    r = git(["init", "-q"], path)
+    print("git init in %s: %s" % (label, "ok (no remote - keep it that way)" if r.returncode == 0 else r.stderr.strip()))
+
+
+def cmd_init(ctx, args):
+    copied = init_instance(ctx.me)
     print("copied %d template file(s) into %s" % (copied, ctx.me))
-    if not is_own_repo(ctx.me):
-        r = git(["init", "-q"], ctx.me)
-        print("git init in me/: %s" % ("ok" if r.returncode == 0 else r.stderr.strip()))
-    else:
-        print("me/ is already a git repository")
+    git_init_private(ctx.me, os.path.relpath(ctx.me, ctx.base) + "/")
     r = git(["config", "core.hooksPath", ".githooks"], ctx.root)
     print("engine hooks: %s" % ("core.hooksPath=.githooks" if r.returncode == 0 else r.stderr.strip()))
     return 0
 
+
+# --------------------------------------------------------------------------------------------
+# household / profile
+# --------------------------------------------------------------------------------------------
+
+def _free_color(members):
+    used = {m.get("color") for m in members}
+    return next((c for c in MEMBER_COLORS if c not in used), MEMBER_COLORS[len(members) % len(MEMBER_COLORS)])
+
+
+def _check_new_member(hh, pid, name, color):
+    if not PROFILE_ID_RE.match(pid or ""):
+        raise BosError("member id must be lowercase letters/digits/-/_ (max 32), e.g. 'alex'")
+    if any(m["id"] == pid for m in hh["members"]):
+        raise BosError("member %r already exists" % pid)
+    if not (name or "").strip():
+        raise BosError("--name is required")
+    if color and color not in MEMBER_COLORS:
+        raise BosError("--color must be one of %s" % "/".join(MEMBER_COLORS))
+
+
+def _write_household(hdir, hh):
+    errs = household_errors(hh)
+    if errs:
+        raise BosError("household.json would be invalid: " + "; ".join(errs))
+    write_json_file(os.path.join(hdir, "household.json"), hh)
+
+
+def cmd_household_init(ctx, args):
+    hdir = ctx.household_dir or DEFAULT_HOUSEHOLD
+    base = os.path.dirname(hdir)
+    hpath = os.path.join(hdir, "household.json")
+    if os.path.exists(hpath):
+        hh = read_json_file(hpath)
+        if household_errors(hh):
+            raise BosError("existing %s is invalid: %s" % (hpath, "; ".join(household_errors(hh))))
+        print("household.json exists - adding what is missing")
+    else:
+        hh = {"schema": 1, "name": None, "members": [], "default_member": None}
+    if args.name:
+        hh["name"] = args.name
+    me_dir = os.path.abspath(ctx.opts["me"]) if ctx.opts.get("me") else os.path.join(base, "me")
+    me_rel = os.path.relpath(me_dir, base).replace(os.sep, "/")
+    registered = next((m for m in hh["members"] if _same_path(os.path.join(base, m["path"]), me_dir)), None)
+    has_me = os.path.isdir(me_dir) and bool(os.listdir(me_dir))
+    if has_me and not registered:
+        if not (args.member_id and args.member_name):
+            raise BosError("%s/ exists - register it as a member: --member-id ID --member-name NAME [--color C]"
+                           % me_rel)
+        if me_rel.startswith("..") or not member_path_ok(me_rel):
+            raise BosError("instance %s must be a folder inside %s" % (me_dir, base))
+        _check_new_member(hh, args.member_id, args.member_name, args.color)
+        registered = {"id": args.member_id, "name": args.member_name.strip(),
+                      "color": args.color or _free_color(hh["members"]), "path": me_rel, "consent": True}
+        hh["members"].append(registered)
+        print("registered %s/ as member %r (%s, consent: yes)" % (me_rel, registered["id"], registered["color"]))
+    if registered and not hh.get("default_member"):
+        hh["default_member"] = registered["id"]
+    os.makedirs(hdir, exist_ok=True)
+    _write_household(hdir, hh)
+    print("wrote %s" % os.path.relpath(hpath, base))
+    spath = os.path.join(hdir, "settings.json")
+    if not os.path.exists(spath):
+        mine = read_json_file(os.path.join(me_dir, "settings.json"), {}) if has_me else {}
+        mine = mine if isinstance(mine, dict) else {}
+        shared = {"schema": 1}
+        for k in ("language", "timezone") + SHARED_SETTINGS:
+            if k in mine:
+                shared[k] = mine[k]
+        if isinstance(mine.get("costs"), dict) and mine["costs"].get("currency"):
+            shared["costs"] = {"currency": mine["costs"]["currency"]}
+        write_json_file(spath, shared)
+        print("wrote %s (shared: %s)" % (os.path.relpath(spath, base), ", ".join(k for k in shared if k != "schema")))
+    for sub in ("pantry", "recipes"):
+        os.makedirs(os.path.join(hdir, sub), exist_ok=True)
+    moved = kept = 0
+    if has_me:
+        for sub in ("pantry", "recipes"):
+            for b, _, files in os.walk(os.path.join(me_dir, sub)):
+                for f in sorted(files):
+                    src = os.path.join(b, f)
+                    rel = os.path.relpath(src, me_dir)
+                    dst = os.path.join(hdir, rel)
+                    if os.path.exists(dst) and os.path.getsize(dst) > 0:
+                        kept += 1
+                        print("kept  %s/%s - household/%s already has content; merge by hand "
+                              "(bos doctor warns until one is gone)" % (me_rel, rel, rel))
+                        continue
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.move(src, dst)
+                    moved += 1
+                    print("moved %s/%s -> household/%s" % (me_rel, rel, rel))
+    git_init_private(hdir, "household/")
+    print("%d file(s) moved, %d kept. Commit both private repos, e.g.:\n"
+          "  git -C %s add -A && git -C %s commit -qm 'kitchen moved to household'\n"
+          "  git -C household add -A && git -C household commit -qm 'household init'"
+          % (moved, kept, me_rel, me_rel))
+    return 0
+
+
+def cmd_profile_add(ctx, args):
+    if not ctx.household:
+        raise BosError("no household yet - run `bos.py household init` first")
+    hh = read_json_file(os.path.join(ctx.household_dir, "household.json"))
+    _check_new_member(hh, args.id, args.name, args.color)
+    rel = (args.path or "people/" + args.id).strip("/")
+    if not member_path_ok(rel):
+        raise BosError("--path must be a relative folder like people/%s" % args.id)
+    if any(m["path"].strip("/") == rel for m in hh["members"]):
+        raise BosError("%s already belongs to another member" % rel)
+    dest = os.path.join(ctx.base, *rel.split("/"))
+    if os.path.isdir(dest) and os.listdir(dest) and not os.path.exists(os.path.join(dest, "settings.json")):
+        raise BosError("%s exists and is not an instance folder" % dest)
+    lang = args.language or ctx.household_settings.get("language") or ctx.settings.get("language") or "en"
+    copied = init_instance(dest, {"language": lang, "modules": []})
+    print("created %s/ (%d template file(s), language %s, modules [] until onboarding)" % (rel, copied, lang))
+    git_init_private(dest, rel + "/")
+    m = {"id": args.id, "name": args.name.strip(), "color": args.color or _free_color(hh["members"]),
+         "path": rel, "consent": bool(args.consent)}
+    hh["members"].append(m)
+    _write_household(ctx.household_dir, hh)
+    print("registered member %r (%s, consent: %s)" % (m["id"], m["color"], "yes" if m["consent"] else "no"))
+    if not m["consent"]:
+        print("nothing is logged for %s until their own interview is done and they agree: "
+              "`bos.py profile consent %s`" % (m["name"], m["id"]))
+    return 0
+
+
+def cmd_profile_list(ctx, args):
+    members = ctx.members()
+    if args.json:
+        print(dumps({"household": ctx.household.get("name") if ctx.household else None,
+                     "default": ctx.profile_id, "members": members}))
+        return 0
+    if not ctx.household:
+        rel = os.path.relpath(ctx.me, ctx.base)
+        print("single-user mode (no household/household.json): profile 'me' -> %s"
+              % (ctx.me if rel.startswith("..") else rel))
+        return 0
+    default = ctx.household.get("default_member")
+    for m in members:
+        print("%s %-12s %-16s %-8s consent:%-3s %s" % ("*" if m["id"] == default else " ", m["id"], m["name"],
+                                                      m["color"], "yes" if m["consent"] else "no", m["path"]))
+    return 0
+
+
+def cmd_profile_consent(ctx, args):
+    if not ctx.household:
+        raise BosError("no household - consent applies to household members only")
+    hh = read_json_file(os.path.join(ctx.household_dir, "household.json"))
+    m = next((m for m in hh["members"] if m["id"] == args.id), None)
+    if m is None:
+        raise BosError("unknown profile %r" % args.id)
+    m["consent"] = not args.revoke
+    _write_household(ctx.household_dir, hh)
+    print("%s: consent %s" % (m["id"], "granted - logging enabled" if m["consent"] else "revoked - nothing new is logged"))
+    return 0
+
+
+# --------------------------------------------------------------------------------------------
+# service (macOS launchd agent for the dashboard)
+# --------------------------------------------------------------------------------------------
+
+SERVICE_LABEL = "io.body-os.dashboard"
+
+
+def service_plist_path():
+    return os.path.join(os.path.expanduser("~"), "Library", "LaunchAgents", SERVICE_LABEL + ".plist")
+
+
+def service_plist(ctx, port, lan):
+    o = ctx.opts
+    argv = [sys.executable, os.path.abspath(__file__)]
+    for flag in ("me", "data", "household"):
+        if o.get(flag):
+            argv += ["--" + flag, os.path.abspath(o[flag])]
+    argv += ["dashboard", "--port", str(port)] + (["--lan"] if lan else [])
+    log = os.path.join(ctx.data, "dashboard.log")
+    return {"Label": SERVICE_LABEL, "ProgramArguments": argv, "RunAtLoad": True, "KeepAlive": True,
+            "WorkingDirectory": ROOT, "StandardOutPath": log, "StandardErrorPath": log,
+            "EnvironmentVariables": {"PYTHONUNBUFFERED": "1"}, "ProcessType": "Background"}
+
+
+def _launchctl(cmd, dry_run):
+    print("$ " + " ".join(cmd))
+    if dry_run:
+        return 0
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+    except OSError as e:
+        print("  %s" % e)
+        return 1
+    out = (r.stdout + r.stderr).strip()
+    if out:
+        print("  " + out.replace("\n", "\n  "))
+    return r.returncode
+
+
+def _port_open(port):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def cmd_service(ctx, args):
+    import plistlib
+    if sys.platform != "darwin":
+        raise BosError("`bos service` manages a macOS launchd agent; on this system run "
+                       "`bos.py dashboard` under your own service manager (e.g. a systemd user unit)")
+    path = service_plist_path()
+    domain = "gui/%d" % os.getuid()
+    if args.service_cmd == "install":
+        pl = service_plist(ctx, args.port, args.lan)
+        data = plistlib.dumps(pl).decode("utf-8")
+        if args.dry_run:
+            print("# would write %s\n%s" % (path, data))
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.makedirs(ctx.data, exist_ok=True)
+            os.close(os.open(pl["StandardOutPath"], os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
+            os.chmod(pl["StandardOutPath"], 0o600)
+            if os.path.exists(path):
+                _launchctl(["launchctl", "bootout", "%s/%s" % (domain, SERVICE_LABEL)], False)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(data)
+            print("wrote %s" % path)
+        if _launchctl(["launchctl", "bootstrap", domain, path], args.dry_run) != 0:
+            _launchctl(["launchctl", "load", "-w", path], args.dry_run)
+        print("dashboard service: http://127.0.0.1:%d/ (log: %s)%s" % (
+            args.port, pl["StandardOutPath"], " - LAN on; see /devices for the phone link" if args.lan else ""))
+        if args.lan:
+            print("note: macOS may ask whether Python may accept incoming connections - allow it. "
+                  "The Mac must be awake for phones to reach it.")
+        return 0
+    if args.service_cmd == "uninstall":
+        if _launchctl(["launchctl", "bootout", "%s/%s" % (domain, SERVICE_LABEL)], args.dry_run) != 0:
+            _launchctl(["launchctl", "unload", "-w", path], args.dry_run)
+        if args.dry_run:
+            print("# would remove %s" % path)
+        elif os.path.exists(path):
+            os.remove(path)
+            print("removed %s" % path)
+        return 0
+    # status
+    port = args.port
+    if os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                argv = plistlib.load(f).get("ProgramArguments") or []
+            if "--port" in argv:
+                port = int(argv[argv.index("--port") + 1])
+        except (OSError, ValueError, IndexError, plistlib.InvalidFileException):
+            pass
+        print("plist:   %s" % path)
+    else:
+        print("plist:   not installed (%s)" % path)
+    if args.dry_run:
+        print("$ launchctl print %s/%s" % (domain, SERVICE_LABEL))
+        return 0
+    try:
+        r = subprocess.run(["launchctl", "print", "%s/%s" % (domain, SERVICE_LABEL)], capture_output=True, text=True)
+        loaded = r.returncode == 0
+        state = re.search(r"^\s*state = (.+)$", r.stdout, re.M)
+    except OSError:
+        loaded, state = False, None
+    print("launchd: %s" % (("loaded, " + state.group(1).strip()) if loaded and state else "loaded" if loaded else "not loaded"))
+    print("port:    %d %s" % (port, "responds" if _port_open(port) else "does not respond"))
+    return 0 if loaded else 1
+
+
+# --------------------------------------------------------------------------------------------
+# doctor
+# --------------------------------------------------------------------------------------------
 
 def cmd_doctor(ctx, args):
     fails = warns = 0
@@ -2412,34 +3138,64 @@ def cmd_doctor(ctx, args):
         warns += level == "WARN"
         print("%-4s %s" % (level, msg))
 
-    if not os.path.isdir(ctx.me):
-        report("FAIL", "no instance folder at %s - run `bos.py init`" % ctx.me)
-    else:
-        report("OK", "instance folder %s" % ctx.me)
-        if is_own_repo(ctx.me):
-            report("OK", "me/ is its own git repository")
-            remotes = git(["remote", "-v"], ctx.me).stdout.strip()
+    def check_private(path, label):
+        """Own git repo, no remote, ignored by the engine repo when inside it."""
+        if is_own_repo(path):
+            report("OK", "%s is its own git repository" % label)
+            remotes = git(["remote", "-v"], path).stdout.strip()
             if remotes:
-                report("WARN", "!!! me/ HAS A GIT REMOTE - personal health data could be pushed. "
-                               "Remove it unless this is deliberate:\n     " + remotes.replace("\n", "\n     "))
+                report("WARN", "!!! %s HAS A GIT REMOTE - personal health data could be pushed. "
+                               "Remove it unless this is deliberate:\n     %s" % (label, remotes.replace("\n", "\n     ")))
             else:
-                report("OK", "me/ has no remote")
+                report("OK", "%s has no remote" % label)
         else:
-            report("FAIL", "me/ is not its own git repository - run `bos.py init`")
-        inside = os.path.realpath(ctx.me).startswith(os.path.realpath(ctx.root) + os.sep)
-        if inside:
-            r = git(["check-ignore", "-q", os.path.relpath(ctx.me, ctx.root) + "/"], ctx.root)
+            report("FAIL", "%s is not its own git repository - run `git init` in it (or `bos.py init`)" % label)
+        if os.path.realpath(path).startswith(os.path.realpath(ctx.root) + os.sep):
+            r = git(["check-ignore", "-q", os.path.relpath(path, ctx.root) + "/"], ctx.root)
             if r.returncode == 0:
-                report("OK", "instance folder is git-ignored by the engine repo")
+                report("OK", "%s is git-ignored by the engine repo" % label)
             else:
-                report("FAIL", "instance folder is NOT ignored by the engine repo - check .gitignore")
+                report("FAIL", "%s is NOT ignored by the engine repo - check .gitignore" % label)
         else:
-            report("OK", "instance folder is outside the engine repo")
-        problems = validate_all(ctx)
+            report("OK", "%s is outside the engine repo" % label)
+
+    def check_instance(c, label):
+        if not os.path.isdir(c.me):
+            report("FAIL", "no instance folder at %s - run `bos.py init`%s" % (
+                c.me, "" if not c.member else " or `bos.py profile add`"))
+            return
+        report("OK", "instance folder %s" % c.me)
+        check_private(c.me, label)
+        problems = validate_all(c)
         if problems:
-            report("FAIL", "%d data problem(s); run `bos.py validate`" % len(problems))
+            report("FAIL", "%d data problem(s) in %s; run `bos.py%s validate`" % (
+                len(problems), label, " --profile " + c.member["id"] if c.member else ""))
         else:
-            report("OK", "jsonl files valid")
+            report("OK", "%s jsonl files valid" % label)
+
+    if ctx.household:
+        hdir = ctx.household_dir
+        report("OK", "household mode: %s (%d member(s))" % (hdir, len(ctx.household["members"])))
+        check_private(hdir, "household/")
+        if not ctx.member:
+            report("WARN", "no default member: set default_member in household.json (or keep a member at me/)")
+        for m in ctx.household["members"]:
+            c = ctx.for_profile(m["id"])
+            label = "%s/ (%s%s)" % (m["path"].strip("/"), m["id"], "" if m["consent"] else ", no consent yet")
+            check_instance(c, label)
+            for rel in SHARED_FILES:
+                mine, shared = os.path.join(c.me, rel), os.path.join(hdir, rel)
+                if os.path.exists(mine) and os.path.exists(shared):
+                    report("WARN", "both household/%s and %s/%s exist - the household copy is used; merge and "
+                                   "remove the member copy" % (rel, m["path"].strip("/"), rel))
+        kpath = os.path.join(hdir, "server.json")
+    else:
+        check_instance(ctx, os.path.relpath(ctx.me, ctx.base) + "/")
+        kpath = os.path.join(ctx.data, "server.json")
+    if os.path.exists(kpath):
+        mode = os.stat(kpath).st_mode & 0o777
+        report("OK" if not mode & 0o077 else "WARN", "household key %s (mode %o%s)" % (
+            kpath, mode, "" if not mode & 0o077 else " - run chmod 600"))
     hp = git(["config", "--get", "core.hooksPath"], ctx.root).stdout.strip()
     if hp == ".githooks":
         report("OK", "engine hooks enabled (core.hooksPath=.githooks)")
@@ -2449,8 +3205,9 @@ def cmd_doctor(ctx, args):
         p = os.path.join(ctx.root, ".githooks", h)
         if not (os.path.isfile(p) and os.access(p, os.X_OK)):
             report("FAIL", ".githooks/%s missing or not executable" % h)
-    r = git(["check-ignore", "-q", "data/"], ctx.root)
-    report("OK" if r.returncode == 0 else "FAIL", "data/ is %sgit-ignored" % ("" if r.returncode == 0 else "NOT "))
+    for d in ("data/", "people/", "household/"):
+        r = git(["check-ignore", "-q", d], ctx.root)
+        report("OK" if r.returncode == 0 else "FAIL", "%s is %sgit-ignored" % (d, "" if r.returncode == 0 else "NOT "))
     print("%d failure(s), %d warning(s)" % (fails, warns))
     return 1 if fails else 0
 
@@ -2812,13 +3569,16 @@ def main(argv=None):
     p.add_argument("--me", help="instance folder (default: <repo>/me)")
     p.add_argument("--data", help="derived data folder (default: <repo>/data)")
     p.add_argument("--today", help="pretend today is DATE (YYYY-MM-DD) for summary/pantry/build")
+    p.add_argument("--household", help="household folder (default: <repo>/household; with --me only if given)")
+    p.add_argument("--profile", help="household member id whose instance folder to use "
+                                     "(default: household default_member, else me/)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("init", help="create me/ from templates/me, git init it, enable engine hooks")
     sub.add_parser("doctor", help="check privacy guards and data validity")
 
     for name, hlp in (("log", "append health event(s) to me/log/YYYY/YYYY-MM.jsonl"),
-                      ("pantry-log", "append pantry event(s) to me/pantry/pantry.jsonl")):
+                      ("pantry-log", "append pantry event(s) to pantry/pantry.jsonl (household/ in household mode)")):
         sp = sub.add_parser(name, help=hlp, description=hlp + ". Input: a JSON object or array as argument, "
                             "--file, or stdin. Missing id/ts/src are filled (ts = now, local offset; naive "
                             "timestamps get the local offset).")
@@ -2842,9 +3602,48 @@ def main(argv=None):
     sub.add_parser("build", help="rebuild data/body-os.sqlite and datasette metadata")
     sp = sub.add_parser("dash", help="build, then serve the Datasette dashboard on 127.0.0.1")
     sp.add_argument("--port", type=int, default=8001)
-    sp = sub.add_parser("dashboard", help="serve the local dashboard (charts, live from me/) on 127.0.0.1")
+    sp = sub.add_parser("dashboard", help="serve the dashboard (live, read-only) on 127.0.0.1, or the LAN with --lan")
     sp.add_argument("--port", type=int, default=8030)
     sp.add_argument("--days", choices=DASHBOARD_PERIODS, default="30", help="default period (14/30/90/all)")
+    sp.add_argument("--lan", action="store_true", help="listen on all interfaces; other devices need the household key")
+    sp.add_argument("--rotate-key", action="store_true", help="replace the household key (re-pair every device)")
+
+    sp = sub.add_parser("household", help="household mode: shared kitchen for several members")
+    hsub = sp.add_subparsers(dest="household_cmd", required=True)
+    hi = hsub.add_parser("init", help="create household/ (private git repo), register me/, move the kitchen there")
+    hi.add_argument("--name", help="household name shown in the dashboard")
+    hi.add_argument("--member-id", help="id for the existing me/ instance, e.g. alex")
+    hi.add_argument("--member-name", help="display name for the existing me/ instance")
+    hi.add_argument("--color", choices=MEMBER_COLORS, help="avatar colour for the existing me/ instance")
+
+    sp = sub.add_parser("profile", help="household members: add / list / consent")
+    psub = sp.add_subparsers(dest="profile_cmd", required=True)
+    pa = psub.add_parser("add", help="create a member instance (people/<id>/) from templates/me and register it")
+    pa.add_argument("id")
+    pa.add_argument("--name", required=True)
+    pa.add_argument("--color", choices=MEMBER_COLORS)
+    pa.add_argument("--path", help="instance folder relative to the engine root (default people/<id>)")
+    pa.add_argument("--language", choices=("de", "en"), help="default: household language")
+    g = pa.add_mutually_exclusive_group()
+    g.add_argument("--consent", dest="consent", action="store_true", help="member already agreed (default: no)")
+    g.add_argument("--no-consent", dest="consent", action="store_false", help="default: nothing is logged yet")
+    pa.set_defaults(consent=False)
+    pl = psub.add_parser("list", help="list members")
+    pl.add_argument("--json", action="store_true")
+    pc = psub.add_parser("consent", help="record that a member agreed to tracking (after their interview)")
+    pc.add_argument("id")
+    pc.add_argument("--revoke", action="store_true", help="withdraw consent: nothing new is logged")
+
+    sp = sub.add_parser("service", help="macOS: run the dashboard in the background (launchd agent)")
+    ssub = sp.add_subparsers(dest="service_cmd", required=True)
+    for name, hlp in (("install", "write ~/Library/LaunchAgents/%s.plist and load it" % SERVICE_LABEL),
+                      ("uninstall", "unload and remove the launchd agent"),
+                      ("status", "is the agent loaded and does the port respond?")):
+        sc = ssub.add_parser(name, help=hlp)
+        sc.add_argument("--port", type=int, default=8030)
+        sc.add_argument("--dry-run", action="store_true", help="print the plist and commands only")
+        if name == "install":
+            sc.add_argument("--lan", action="store_true", help="serve the LAN with the household key")
 
     sp = sub.add_parser("foods-import", help="build data/foods.sqlite from the BLS 4.0 archive",
                         description="Build data/foods.sqlite from BLS 4.0. " + BLS_HELP)
@@ -2865,7 +3664,14 @@ def main(argv=None):
                 "validate": cmd_validate, "summary": cmd_summary, "pantry": cmd_pantry, "build": cmd_build,
                 "dash": cmd_dash, "dashboard": cmd_dashboard, "foods-import": cmd_foods_import}
     try:
-        ctx = Ctx(args.me, args.data, args.today)
+        ctx = Ctx(args.me, args.data, args.today, args.household, args.profile)
+        if args.cmd == "household":
+            return cmd_household_init(ctx, args)
+        if args.cmd == "profile":
+            return {"add": cmd_profile_add, "list": cmd_profile_list, "consent": cmd_profile_consent}[
+                args.profile_cmd](ctx, args)
+        if args.cmd == "service":
+            return cmd_service(ctx, args)
         if args.cmd == "food":
             return cmd_food_search(ctx, args) if args.food_cmd == "search" else cmd_food_calc(ctx, args)
         return handlers[args.cmd](ctx, args)

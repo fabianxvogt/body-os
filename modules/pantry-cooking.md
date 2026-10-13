@@ -37,7 +37,7 @@ On request ("was koche ich?") and proactively when items become `soon`.
   `household.portions_default`.
 - Device steps: write own instructions (e.g. Thermomix speed/time/temperature). Proprietary recipe
   platforms (Cookidoo etc.): mention a recipe **by name or link** only; never copy their text.
-- After cooking: append to `me/recipes/cookbook.jsonl` with `status: cooked`; ask 👍/👎 once and use
+- After cooking: append to `recipes/cookbook.jsonl` (in `household/` in household mode) with `status: cooked`; ask 👍/👎 once and use
   ratings for future suggestions.
 
 ## Shopping list

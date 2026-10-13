@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "updated": "2026-10-12",
+  "exercises": [
+    { "name": "squat", "plan": "A/B", "sets": 3, "reps": 8, "kg": 72, "next_kg": 74 },
+    { "name": "bench press", "plan": "A/B", "sets": 3, "reps": 8, "kg": 50, "next_kg": 50 },
+    { "name": "row", "plan": "A/B", "sets": 2, "reps": 10, "kg": 45, "next_kg": 47.5 },
+    { "name": "overhead press", "plan": "B", "sets": 3, "reps": 8, "kg": 30 }
+  ]
+}
