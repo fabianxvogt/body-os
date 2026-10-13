@@ -2506,10 +2506,12 @@ UNAUTHORIZED_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8
 <title>body-os</title><style>body{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:30em;margin:12vh auto;
 padding:0 20px;color:#52514e}h1{font-size:20px;color:inherit}@media(prefers-color-scheme:dark){body{background:#111110;
 color:#c3c2b7}}</style></head><body><h1>body-os &middot; kein Zugriff</h1>
-<p>Diesen Link vom Mac aus &ouml;ffnen / QR-Code scannen: auf dem Mac <b>http://127.0.0.1:PORT/devices</b> aufrufen
-und den QR-Code mit diesem Ger&auml;t scannen.</p>
-<p lang="en">No access. Open the device link from the Mac, or scan the QR code shown at
-<b>http://127.0.0.1:PORT/devices</b> on the Mac.</p></body></html>"""
+<p>Dieses Ger&auml;t braucht einmal den <b>Ger&auml;te-Link</b> (mit Schl&uuml;ssel). So bekommst du ihn:</p>
+<ul><li>Jemand im Haushalt zeigt dir den <b>QR-Code</b> &ndash; scannen, fertig.</li>
+<li>Oder auf dem Rechner, auf dem body-os l&auml;uft, im Terminal: <code>python3 tools/bos.py devices --open</code>
+(bzw. dort im Browser <code>http://127.0.0.1:PORT/devices</code>).</li></ul>
+<p lang="en">No access yet. This device needs the one-time device link: scan the QR code from someone in the
+household, or run <code>python3 tools/bos.py devices --open</code> on the computer that runs body-os.</p></body></html>"""
 
 
 def server_json_path(ctx):
@@ -3021,6 +3023,23 @@ def cmd_profile_consent(ctx, args):
     m["consent"] = not args.revoke
     _write_household(ctx.household_dir, hh)
     print("%s: consent %s" % (m["id"], "granted - logging enabled" if m["consent"] else "revoked - nothing new is logged"))
+    return 0
+
+
+def cmd_devices(ctx, args):
+    """Print (or open) the one-time device links with the household key. Terminal only - never logged."""
+    key = load_server_config(server_json_path(ctx)).get("key")
+    if not _valid_key(key):
+        raise BosError("no household key yet - start the dashboard once with --lan")
+    links = device_links(key, args.port)
+    if args.open and links:
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.run([opener, links[0]["link"]])
+        print("opened %s in the default browser" % links[0]["url"])
+        return 0
+    print("Device links (share only with household members; anyone with a link sees every profile):")
+    for l in links:
+        print("  %s" % l["link"])
     return 0
 
 
@@ -3857,6 +3876,10 @@ def main(argv=None):
     pc.add_argument("id")
     pc.add_argument("--revoke", action="store_true", help="withdraw consent: nothing new is logged")
 
+    sp = sub.add_parser("devices", help="print the one-time device links (household key) for phones/laptops")
+    sp.add_argument("--port", type=int, default=8030)
+    sp.add_argument("--open", action="store_true", help="open the first link in this computer's browser")
+
     sp = sub.add_parser("sync", help="home server sync of the private repos (pull, then push)")
     sp.add_argument("--pull-only", action="store_true")
     sp.add_argument("--push-only", action="store_true")
@@ -3906,6 +3929,8 @@ def main(argv=None):
                 args.profile_cmd](ctx, args)
         if args.cmd == "service":
             return cmd_service(ctx, args)
+        if args.cmd == "devices":
+            return cmd_devices(ctx, args)
         if args.cmd == "sync":
             return cmd_sync_setup(ctx, args) if args.sync_cmd == "setup" else cmd_sync(ctx, args)
         if args.cmd == "food":

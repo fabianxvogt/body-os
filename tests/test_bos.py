@@ -1251,7 +1251,7 @@ class TestLanServer(TempHousehold):
             self.assertEqual(code, 401, path)
             self.assertNotIn(b"pantry", body)
         code, h, body = self.get("/")
-        self.assertIn("QR-Code scannen", body.decode())
+        self.assertIn("bos.py devices --open", body.decode())
         self.assertIn("text/html", h["content-type"])
         code, h, _ = self.get("/?key=" + key)
         self.assertEqual((code, h["location"]), (302, "/"))
