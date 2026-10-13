@@ -2668,10 +2668,10 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
             if not m:
                 return False
             name, p = m.group(1), m.group(2) or "80"
+            if name in LOOPBACK_HOSTS:
+                return True  # any port: SSH tunnels forward a different local port; rebinding needs a foreign name
             if p != str(self.server.server_address[1]):
                 return False
-            if name in LOOPBACK_HOSTS:
-                return True
             extra = [str(h).lower() for h in server_cfg().get("allowed_hosts") or [] if isinstance(h, str)]
             if name in extra:
                 return True
