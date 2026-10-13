@@ -1409,6 +1409,16 @@ def phase_json(p, today):
             "day": (today - p["from"]).days + 1, "of": (p["to"] - p["from"]).days + 1 if p["to"] else None}
 
 
+def upcoming_phase_json(phases, today):
+    """The next phase that has not started yet, marked as upcoming (for a banner before the plan begins)."""
+    nxt = [p for p in phases if p["from"] > today]
+    if not nxt:
+        return None
+    out = phase_json(nxt[0], today)
+    out.update(upcoming=True, starts_in=(nxt[0]["from"] - today).days, day=0)
+    return out
+
+
 def settings_decisions(settings, today):
     out = []
     for d in _list(settings.get("decisions")):
@@ -1835,7 +1845,7 @@ def dashboard_data(ctx, days="30"):
                    "categories": [dict(key=c, eur=v["eur"], est=v["est"], unknown=v["unknown"], any=v["any"])
                                   for c, v in msum.items()]}
     tab_today = {
-        "phase": phase_json(phase_now, to), "next_decision": next_decision(decisions),
+        "phase": phase_json(phase_now, to) or upcoming_phase_json(phases, to), "next_decision": next_decision(decisions),
         "checklist": checklist, "substances": subs_today,
         "due": {"training": train_due, "training_next": train_next, "measurements": measure_due,
                 "review": review_due},

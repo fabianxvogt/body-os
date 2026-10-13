@@ -606,6 +606,17 @@ class TestDashboard(TempMe):
             self.assertTrue(os.path.exists(os.path.join(vendor, name)))
 
 
+class TestUpcomingPhase(unittest.TestCase):
+    def test_banner_shows_next_phase_before_plan_starts(self):
+        phases = bos.settings_phases({"phases": [{"id": "baseline", "name": "Baseline", "from": "2026-10-14", "to": "2026-10-27"}]})
+        today = dt.date(2026, 10, 13)
+        self.assertIsNone(bos.current_phase(phases, today))
+        up = bos.upcoming_phase_json(phases, today)
+        self.assertTrue(up["upcoming"])
+        self.assertEqual(up["starts_in"], 1)
+        self.assertIsNone(bos.upcoming_phase_json(phases, dt.date(2026, 10, 14)))
+
+
 class TestHooks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bos-hook-")

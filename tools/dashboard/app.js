@@ -37,7 +37,7 @@
         journal: "What did I note, review and decide?"
       },
       // today
-      phase: "Current phase", phase_day: "Day {x} of {y}", phase_day_open: "Day {x}", no_phase: "No phase planned",
+      phase: "Current phase", phase_next: "Next phase", phase_starts: "starts {when} · {date}", phase_day: "Day {x} of {y}", phase_day_open: "Day {x}", no_phase: "No phase planned",
       no_phase_hint: "Add phases in settings.json (phases) to see where you are in your plan.",
       next_decision: "Next decision", no_decision: "No open decision",
       focus: "Focus of the week", focus_from: "from {file}", no_focus: "No weekly focus yet",
@@ -195,7 +195,7 @@
         training: "Trainiere ich nach Plan, und werde ich stärker?",
         journal: "Was habe ich notiert, ausgewertet und entschieden?"
       },
-      phase: "Aktuelle Phase", phase_day: "Tag {x} von {y}", phase_day_open: "Tag {x}", no_phase: "Keine Phase geplant",
+      phase: "Aktuelle Phase", phase_next: "Nächste Phase", phase_starts: "beginnt {when} · {date}", phase_day: "Tag {x} von {y}", phase_day_open: "Tag {x}", no_phase: "Keine Phase geplant",
       no_phase_hint: "Phasen in settings.json (phases) eintragen, um zu sehen, wo du im Plan stehst.",
       next_decision: "Nächste Entscheidung", no_decision: "Keine offene Entscheidung",
       focus: "Fokus der Woche", focus_from: "aus {file}", no_focus: "Noch kein Wochenfokus",
@@ -755,17 +755,57 @@
     opt.textStyle = { fontFamily: P.font, color: P.text2 };
     opt.animationDuration = 450;
     opt.animationDurationUpdate = 250;
-    if (!entry.inst) entry.inst = echarts.init(entry.el, null, { renderer: "svg" });
+    if (!entry.inst) {
+      entry.inst = echarts.init(entry.el, null, { renderer: "svg" });
+      observeSize(entry);
+    }
     entry.inst.setOption(opt, { notMerge: true });
   }
 
+  // Keep every chart exactly as wide as its card: grid reflows, lazy tabs, table toggles and pane
+  // resizes all change the container without a window resize event.
+  function observeSize(entry) {
+    if (typeof ResizeObserver === "undefined") return;
+    var pending = false;
+    new ResizeObserver(function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        if (!entry.inst || entry.el.hidden || !entry.el.clientWidth) return;
+        var wide = entry.el.clientWidth >= 520;
+        if (wide !== entry.wide) renderChart(entry, pal()); else entry.inst.resize();
+      });
+    }).observe(entry.el);
+  }
+
+  // Close holes in card grids: a row whose cards don't fill all columns lets its last card grow.
+  // Done in JS because CSS can't count wide (span 2) cards or the responsive column count.
+  function fillRows(root) {
+    root.querySelectorAll(".grid:not(.kpis)").forEach(function (g) {
+      var kids = Array.prototype.filter.call(g.children, function (c) { return !c.hidden; });
+      kids.forEach(function (c) { c.style.gridColumn = ""; });
+      var cols = getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length;
+      if (cols < 2 || !g.clientWidth) return;
+      var gap = parseFloat(getComputedStyle(g).columnGap) || 0, unit = (g.clientWidth + gap) / cols, rows = {};
+      kids.forEach(function (c) { (rows[c.offsetTop] = rows[c.offsetTop] || []).push(c); });
+      Object.keys(rows).forEach(function (top) {
+        var r = rows[top], spans = r.map(function (c) { return Math.max(1, Math.round((c.offsetWidth + gap) / unit)); });
+        var used = spans.reduce(function (a, b) { return a + b; }, 0);
+        if (used < cols) r[r.length - 1].style.gridColumn = "span " + (spans[spans.length - 1] + cols - used);
+      });
+    });
+  }
+
   function renderPanelCharts(panel) {
+    fillRows(panel.el);
     var P = pal();
     panel.charts.forEach(function (c) { renderChart(c, P); });
     panel.themeVer = state.themeVer;
   }
 
   function resizePanelCharts(panel) {
+    fillRows(panel.el);
     var P = null;
     panel.charts.forEach(function (c) {
       if (!c.inst || c.el.hidden) return;
@@ -879,14 +919,15 @@
     var TD = D.tabs.today;
     var g = section(root, null, null, "grid-top");
     // phase banner
-    addCard(g, { title: TD.phase ? T.phase : T.no_phase, cls: "phase-card", custom: function (card) {
+    addCard(g, { title: TD.phase ? (TD.phase.upcoming ? T.phase_next : T.phase) : T.no_phase, cls: "phase-card", custom: function (card) {
       if (!TD.phase) { card.appendChild(el("p", "muted-text", T.no_phase_hint)); return; }
       var p = TD.phase, wrap = el("div", "phase");
       var left = el("div", "phase-main");
       left.appendChild(el("div", "phase-name", p.name));
-      var meta = el("div", "phase-meta", p.of ? tpl(T.phase_day, { x: p.day, y: p.of }) : tpl(T.phase_day_open, { x: p.day }));
+      var meta = el("div", "phase-meta", p.upcoming ? tpl(T.phase_starts, { when: relDay(p.from, D.today), date: fmtDay(p.from, DAY_LONG) })
+        : p.of ? tpl(T.phase_day, { x: p.day, y: p.of }) : tpl(T.phase_day_open, { x: p.day }));
       left.appendChild(meta);
-      if (p.of) {
+      if (p.of && !p.upcoming) {
         var prog = el("div", "progress");
         prog.setAttribute("role", "progressbar");
         prog.setAttribute("aria-valuemin", "0");
