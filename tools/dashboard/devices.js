@@ -7,7 +7,7 @@
       title: "Connect a phone", sub: "Scan the code with the phone's camera, then “Add to Home Screen”.",
       off: "LAN access is off.", off_hint: "Start the dashboard with `bos.py dashboard --lan` (or `bos.py service install --lan`), then reload this page.",
       link: "Device link", copy: "Copy", copied: "Copied", other: "Other addresses",
-      warn: "Anyone with this link sees every profile in this household. Share it only with household members, only in your home network. The Mac must be awake.",
+      warn: "Anyone with this link sees every profile in this household. Share it only with household members, only in your home network. This computer must be on and awake.",
       rotate: "Lost a phone? `bos.py dashboard --rotate-key` invalidates every paired device.",
       steps: ["Phone in the same Wi-Fi as this Mac.", "Scan the QR code (or open the link).", "Share → “Add to Home Screen”."],
       error: "Could not load device information", back: "← Dashboard"
@@ -16,7 +16,7 @@
       title: "Handy verbinden", sub: "Code mit der Handy-Kamera scannen, dann „Zum Home-Bildschirm“.",
       off: "LAN-Zugriff ist aus.", off_hint: "Dashboard mit `bos.py dashboard --lan` starten (oder `bos.py service install --lan`), dann diese Seite neu laden.",
       link: "Geräte-Link", copy: "Kopieren", copied: "Kopiert", other: "Weitere Adressen",
-      warn: "Wer diesen Link hat, sieht alle Profile dieses Haushalts. Nur an Haushaltsmitglieder geben, nur im Heimnetz. Der Mac muss wach sein.",
+      warn: "Wer diesen Link hat, sieht alle Profile dieses Haushalts. Nur an Haushaltsmitglieder geben, nur im Heimnetz. Dieser Rechner muss laufen.",
       rotate: "Handy verloren? `bos.py dashboard --rotate-key` macht alle gekoppelten Geräte ungültig.",
       steps: ["Handy im selben WLAN wie dieser Mac.", "QR-Code scannen (oder Link öffnen).", "Teilen → „Zum Home-Bildschirm“."],
       error: "Geräte-Infos konnten nicht geladen werden", back: "← Dashboard"
