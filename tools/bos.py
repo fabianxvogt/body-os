@@ -2567,20 +2567,32 @@ def local_hostnames():
 
 
 def lan_ipv4s():
-    """Non-loopback IPv4 address of the default route (UDP connect sends no packet)."""
-    out = []
+    """All non-loopback IPv4 addresses of this machine, home-network ranges first.
+
+    The default-route address alone is not enough: with a VPN up it is the tunnel address, while
+    phones in the home Wi-Fi reach the Mac via its Wi-Fi/Ethernet address.
+    """
+    found = []
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.connect(("192.0.2.1", 9))  # TEST-NET-1: only selects the outgoing interface
-            ip = s.getsockname()[0]
+            s.connect(("192.0.2.1", 9))  # TEST-NET-1: only selects the outgoing interface, sends nothing
+            found.append(s.getsockname()[0])
         finally:
             s.close()
-        if ip and not ip.startswith("127.") and ip != "0.0.0.0":
-            out.append(ip)
     except OSError:
         pass
-    return out
+    try:
+        out = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=3).stdout
+        found += re.findall(r"\binet (\d+\.\d+\.\d+\.\d+)", out)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    ips = []
+    for ip in found:
+        if ip and not ip.startswith(("127.", "169.254.")) and ip != "0.0.0.0" and ip not in ips:
+            ips.append(ip)
+    rank = lambda ip: 0 if ip.startswith("192.168.") else 1 if re.match(r"172\.(1[6-9]|2\d|3[01])\.", ip) else 2
+    return sorted(ips, key=rank)
 
 
 def device_links(key, port):
