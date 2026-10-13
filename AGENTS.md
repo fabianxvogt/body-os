@@ -14,11 +14,13 @@ and help them learn. This file is tool-neutral (Claude Code, Codex, Gemini CLI, 
    folder (its `path` in `bos profile list`) wherever this manual says `me/`. Pantry, cookbook and
    shopping list are household-level (`household/`), shared by everyone. Never write events for a
    member with `consent: false` (the tools refuse); offer their own onboarding interview instead.
-3. Then read, in order (household mode: the member's folder instead of `me/`): `me/AGENT.md` (personal rules — they override defaults here),
+3. **Home server:** if the private repos have a `home` remote (`git -C me remote`), run
+   `python3 tools/bos.py sync` now, before reading anything — the server is the source of truth.
+4. Then read, in order (household mode: the member's folder instead of `me/`): `me/AGENT.md` (personal rules — they override defaults here),
    `me/settings.json`, `me/profile.md`, the current plan files listed in `me/settings.json`, and
    `python3 tools/bos.py summary --days 7`. Read raw logs only when a question needs them.
-4. Read [SAFETY.md](SAFETY.md) once per session. It is binding.
-5. Decide the mode from the message: **check-in** (default), **review**, **question/learning**,
+5. Read [SAFETY.md](SAFETY.md) once per session. It is binding.
+6. Decide the mode from the message: **check-in** (default), **review**, **question/learning**,
    **re-interview**, or **engine development**.
 
 ## 1. The one rule: public engine vs. private `me/`
@@ -26,7 +28,7 @@ and help them learn. This file is tool-neutral (Claude Code, Codex, Gemini CLI, 
 | Change | Where | Git |
 |---|---|---|
 | Generic (tools, modules, interview, knowledge, docs) | engine repo | commit, run tests, push (if the user owns the remote) |
-| Personal (data, profile, plans, personal rules, reviews) | `me/` | commit inside `me/` only; `me/` never gets a remote |
+| Personal (data, profile, plans, personal rules, reviews) | `me/` | commit inside `me/` only; remotes only on the home network (`bos sync`), never GitHub/cloud |
 
 Never write personal facts into engine files, examples, tests, commit messages or issues. Test with
 `examples/demo-me/` (synthetic). If a personal need shows a missing generic feature, build it
@@ -54,12 +56,15 @@ synthetic tests use `examples/demo-household/`. Details: [docs/ARCHITECTURE.md](
    timezone in `me/settings.json`. If missing, use a sensible time and mark `conf: "low"`.
 3. Estimate instead of asking. Ask **only** when an answer would change a number materially
    (e.g. "was that 1 or 3 beers?"), and then at most one short question per check-in.
-4. Store with `python3 tools/bos.py log '<json or array>'` (pantry: `pantry-log`; household mode:
-   add `--profile <id>`). Then `git -C me add -A && git -C me commit -qm "check-in <date>"` (household
-   mode: the member's folder, and `git -C household …` after pantry/cookbook changes).
-   **Home server:** if the private repos have a `home` remote, run `python3 tools/bos.py sync` once at
-   the start of the session (before reading) and after every commit — the server is the source of
-   truth, this machine is a working copy and backup. Never add a remote outside the home network.
+4. Store with `python3 tools/bos.py [--profile <id>] log '<json or array>'` (pantry: `pantry-log`).
+   Global options such as `--profile` go **before** the subcommand. Then
+   `git -C me add -A && git -C me commit -qm "check-in <date>"` (household mode: the member's folder,
+   and `git -C household …` after pantry/cookbook changes). With a home server, run
+   `python3 tools/bos.py sync` after every commit. Never add a remote outside the home network.
+   - Joints: always set `tobacco` explicitly (from `me/AGENT.md` shorthand), never leave it out.
+   - Ratings are integers 1–5. Use the time the thing happened as `ts` (sleep: the wake-up time).
+   - Bedtime said in the evening ("Bett 23:30"): store a `note` with `tags: ["bed"]` and that time; the
+     next morning build the `sleep` event from it (sessions have no memory — the note is the memory).
 5. Reply short: a compact confirmation of what was stored (one line per event group), then at most
    one relevant observation or tip. No lectures in daily check-ins.
 6. First check-in of the day: add one line from `bos pantry` if anything is `soon`, `check` or
@@ -97,7 +102,7 @@ python3 tools/bos.py pantry                # pantry with expiry status
 python3 tools/bos.py food search <name>    # nutrient lookup (needs foods-import once)
 python3 tools/bos.py food calc '<json>'    # sum nutrients for [{food_id, g}]
 python3 tools/bos.py build | dash          # SQLite + local Datasette raw-table view (127.0.0.1)
-python3 tools/bos.py dashboard [--port 8030] [--days 14|30|90|all]   # 8-tab dashboard, live from me/ (127.0.0.1)
+python3 tools/bos.py dashboard [--port 8030] [--days 14|30|90|all]   # tab dashboard (+ household Compare), live (127.0.0.1)
 python3 tools/bos.py dashboard --lan [--rotate-key]   # also for phones in the home network (household key)
 python3 tools/bos.py sync [--pull-only|--push-only]    # home server: pull, then push all private repos
 python3 tools/bos.py sync setup --host user@pi.local   # make a home server the source of truth

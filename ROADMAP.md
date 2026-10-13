@@ -18,6 +18,13 @@
 - Chart generation for monthly reviews.
 
 ## Done
+- 2026-10-13: household comparison — Compare tab (`#vergleich` / `#compare`, household mode only) and
+  `GET /api/compare?days=N`: this week's headline per group with a kind leader line, per-group detail
+  (grouped bars, values with n, 🏅 lead marker, table view), weekly trends per member; habits and
+  progress relative to each member's own plan only (never weight, kcal, body measures, BP, labs);
+  consent + `settings.compare.share` gate it, wellbeing and substances are opt-in (substances only
+  when every compared member shares them), plan-relative values rank up to 100 % so meeting the plan
+  is a tie; demo household now has two consenting members (Alex, Sam) and one without consent (Robin).
 - 2026-10-13: home server mode — `bos sync setup|sync` (home-network-only remotes, union merge
   for JSONL), Linux systemd user service, doctor accepts home remotes only.
 - 2026-10-13: households and phones — household mode (`household/household.json`, shared pantry,

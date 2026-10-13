@@ -41,6 +41,8 @@ support. Watch for signs later (extreme restriction, compensatory behaviour, dis
 ## 5. Data
 
 Everything the agent reads goes to the model provider. Health data is special-category data under
-GDPR Art. 9. Keep `me/` (and in household mode `people/` and `household/`) local, without a remote,
-on an encrypted disk (FileVault/BitLocker). Each household member's data needs that member's own
+GDPR Art. 9. Keep `me/` (and in household mode `people/` and `household/`) local: no remote except
+an own home server on the home network (`bos sync`), never GitHub or a cloud. Use encrypted disks
+(FileVault/BitLocker); a home server's SD card is usually unencrypted — keep it physically at home
+and accept that risk deliberately or encrypt it. Each household member's data needs that member's own
 consent; LAN access (`--lan`) shows every profile to anyone holding the household key.

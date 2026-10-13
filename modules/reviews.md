@@ -12,6 +12,10 @@
    - **Next week's focus:** exactly one behaviour to try, plus anything due (measurements, doctor).
    - **Pantry & shopping** (pantry module): what to use up, shopping list proposal.
    - **Learning:** one knowledge link connected to this week's data.
+   - **Household** (household mode, optional, one line): something kind from the Compare tab —
+     a shared win or what the member led this week ("you and Sam both hit your training plan").
+     Only groups both people share; never mention weight, food amounts or body measures, never rank
+     anyone down or shame. Skip it if the member finds it unhelpful.
 3. Present a short chat version; commit `me/`.
 
 ## Monthly (default first Sunday)

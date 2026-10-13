@@ -152,7 +152,32 @@ the dashboard shows an empty state or a hint when a key is missing. Defaults: [t
 | `substances.plan_b` | `{window_days: 14, phase_id: "tobacco-step-1", threshold_pct_of_baseline: 90}` | plan-B check once that phase has started: last ≤ 7 full days vs. baseline; "Plan B due" when ≥ threshold after the window |
 | `reviews.weekly` | e.g. `"sunday-evening"` (first three letters = weekday) | "weekly review due" on that day when `reviews/YYYY-Www.md` is missing |
 | `costs` | see below | spending estimates |
+| `compare.share` | list of groups, default `["consistency", "training", "sleep", "hydration", "protein"]`; opt-in: `"wellbeing"`, `"substances"`; `[]` = not in the comparison | household Compare tab ([below](#compare-household-comparison)) |
 | `display_name`, `color` | single-user mode only: avatar name and colour slot in the dashboard (default "Me"/"Ich", `blue`) | dashboard header |
+
+### Compare (household comparison)
+
+Household mode only (`GET /api/compare?days=N`, dashboard tab Compare / Vergleich). It compares
+habits and progress **relative to each member's own plan**, never body numbers: weight, kcal, body
+measures, blood pressure and labs are not part of it (the protein target uses the weight internally;
+only the percentage leaves). Members with `consent: false` or an empty `compare.share` are never
+included. A group is shown for the members who share it and ranked only when ≥ 2 share it;
+`substances` appears only when **every** compared member shares it. `protein` is never shared while
+`nutrition.show_numbers` is `false` ([SAFETY.md](../SAFETY.md) §2).
+
+| Group | Metrics (n behind each value) |
+|---|---|
+| `consistency` | % of days with a complete check-in (`checklist`), current and longest streak |
+| `training` | sessions vs. own `training.sessions_per_week` (pro rata; this week: progress towards the plan), active minutes per week, strength progress (e1RM change of each lift with ≥ 2 sessions in the period, mean) |
+| `sleep` | mean hours, % nights ≥ 7 h, bedtime spread (SD, lower is better), mean quality |
+| `hydration` | mean water L/day on days with water logged |
+| `protein` | mean % of own protein target midpoint (`goals.protein_g_per_kg` × latest 7-day weight, else `nutrition.targets.protein_g`) |
+| `wellbeing` (opt-in) | mean energy, mood, stress (lower is better) |
+| `substances` (opt-in, all) | tobacco-free logged days, % change of tobacco uses vs. own baseline phase (lower is better) |
+
+Only days since a member's first log count. Ties (equal as displayed) have no leader. Plan-relative
+values rank up to 100 % (sleep up to 8 h): when everyone has met their plan nobody "leads"; values
+above 150 % are reported as `capped`.
 
 ### Costs
 

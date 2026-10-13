@@ -28,11 +28,12 @@
       setting_hint: "Add {key} in settings.json", ago_today: "today", in_days: "in {n} days", days_ago: "{n} days ago",
       tomorrow: "tomorrow", overdue: "overdue", done: "done", open: "open", due: "due", est: "≈ estimate",
       tab: {
-        today: "Today", body: "Body", nutrition: "Nutrition", kitchen: "Kitchen", sleep: "Sleep & energy",
+        today: "Today", compare: "Compare", body: "Body", nutrition: "Nutrition", kitchen: "Kitchen", sleep: "Sleep & energy",
         substances: "Substances", training: "Training", journal: "Journal"
       },
       q: {
         today: "Where do I stand today, and what is still missing?",
+        compare: "How is each of us doing against our own plan?",
         body: "Is my body moving in the planned direction?",
         nutrition: "Am I eating enough protein – and what, when and how much?",
         kitchen: "What needs using up, what is missing, and what do I cook?",
@@ -174,6 +175,37 @@
       decisions_hint: "Add decisions to settings.json to track them here.",
       foot_live: "Live from me/ on every reload · nothing leaves this machine", foot_raw: "Raw tables: bos dash",
       foot_credit: "Charts: Apache ECharts 5.5.1 (Apache-2.0)",
+      // compare
+      cmp_loading: "Loading the comparison …", cmp_week: "This week", cmp_week_sub: "{wk} · {from} – {to} · each against their own plan",
+      cmp_detail: "In the period", cmp_detail_sub: "{from} – {to} · values and n behind each number",
+      cmp_trend: "Week by week", cmp_trend_sub: "one line per person · partial weeks count pro rata",
+      cmp_group: { consistency: "Consistency", training: "Training", sleep: "Sleep", hydration: "Hydration", protein: "Protein",
+        wellbeing: "Wellbeing", substances: "Tobacco-free" },
+      cmp_in: { consistency: "in consistency", training: "in training", sleep: "in sleep", hydration: "in hydration",
+        protein: "in protein", wellbeing: "in wellbeing", substances: "in tobacco-free days" },
+      cmp_m: { complete_days_pct: "Complete check-ins", streak_current: "Current streak", streak_longest: "Longest streak",
+        plan_pct: "Sessions vs. own plan", active_min: "Active minutes / week", strength_pct: "Strength progress (e1RM)",
+        sleep_h: "Sleep Ø", nights_7h_pct: "Nights ≥ 7 h", bedtime_sd_min: "Bedtime spread (SD)", sleep_quality: "Sleep quality",
+        water_l: "Water Ø / day", protein_pct: "Protein vs. own target", energy: "Energy", mood: "Mood", stress: "Stress",
+        tobacco_free_days: "Tobacco-free days", tobacco_vs_baseline_pct: "Tobacco vs. own baseline" },
+      cmp_n: { days: ["{n} day", "{n} days"], nights: ["{n} night", "{n} nights"], sessions: ["{n} session", "{n} sessions"],
+        lifts: ["{n} lift", "{n} lifts"] },
+      cmp_days_unit: ["day", "days"], cmp_lower: "lower is better", cmp_lead: "leads", cmp_metric: "Measure",
+      cmp_leads: "{name} leads {in} – {vals}", cmp_tie: "Neck and neck {in} – {vals}", cmp_met: "Both on plan {in} – {vals}",
+      cmp_all_met: "Everyone on plan {in} – {vals}", cmp_solo: "Only {name} shares this", cmp_vs: " vs ",
+      cmp_no_week: "No entries this week yet", cmp_no_values: "No values in this period yet",
+      cmp_waiting: "The comparison starts with two people",
+      cmp_waiting_text: ["It switches on as soon as {names} has completed onboarding. Until then this tab shows the scorecard of whoever already shares.",
+        "It switches on as soon as {names} have completed onboarding. Until then this tab shows the scorecard of whoever already shares."],
+      cmp_and: " and ",
+      cmp_waiting_share: "It switches on as soon as a second person shares something (settings.json → compare.share).",
+      cmp_foot: "Compared is what each person shares – weight and body measurements never.",
+      cmp_foot_setting: "Choose what you share in settings.json → compare.share (opt-in: wellbeing, substances).",
+      cmp_cap_note: "Plan-relative values rank up to 100 % (sleep up to 8 h) – above that, everyone has met the plan.",
+      cmp_excluded: "Not in the comparison: {names}",
+      cmp_note: { all_must_share: "Tobacco-free days appear only once everyone shares them.",
+        no_training_plan: "{name}: no weekly training plan yet (training.sessions_per_week).",
+        no_protein_target: "{name}: no protein target yet (goals.protein_g_per_kg)." },
       triggers: { "?": "unknown", "after-meal": "after meal" }
     },
     de: {
@@ -192,11 +224,12 @@
       setting_hint: "{key} in settings.json eintragen", ago_today: "heute", in_days: "in {n} Tagen", days_ago: "vor {n} Tagen",
       tomorrow: "morgen", overdue: "überfällig", done: "erledigt", open: "offen", due: "fällig", est: "≈ geschätzt",
       tab: {
-        today: "Heute", body: "Körper", nutrition: "Ernährung", kitchen: "Küche", sleep: "Schlaf & Energie",
+        today: "Heute", compare: "Vergleich", body: "Körper", nutrition: "Ernährung", kitchen: "Küche", sleep: "Schlaf & Energie",
         substances: "Konsum", training: "Training", journal: "Journal"
       },
       q: {
         today: "Wo stehe ich heute, und was fehlt noch?",
+        compare: "Wie gut hält sich jede Person an ihren eigenen Plan?",
         body: "Bewegt sich mein Körper in die geplante Richtung?",
         nutrition: "Esse ich genug Protein – und was, wann und wie viel?",
         kitchen: "Was muss weg, was fehlt, und was koche ich?",
@@ -330,6 +363,36 @@
       decisions_hint: "Entscheidungen in settings.json eintragen, um sie hier zu verfolgen.",
       foot_live: "Live aus me/ bei jedem Neuladen · nichts verlässt diesen Rechner", foot_raw: "Rohdaten-Tabellen: bos dash",
       foot_credit: "Charts: Apache ECharts 5.5.1 (Apache-2.0)",
+      cmp_loading: "Vergleich wird geladen …", cmp_week: "Diese Woche", cmp_week_sub: "{wk} · {from} – {to} · jede Person gegen den eigenen Plan",
+      cmp_detail: "Im Zeitraum", cmp_detail_sub: "{from} – {to} · Werte und n hinter jeder Zahl",
+      cmp_trend: "Woche für Woche", cmp_trend_sub: "eine Linie pro Person · angebrochene Wochen anteilig",
+      cmp_group: { consistency: "Konstanz", training: "Training", sleep: "Schlaf", hydration: "Trinken", protein: "Protein",
+        wellbeing: "Wohlbefinden", substances: "Tabakfrei" },
+      cmp_in: { consistency: "bei der Konstanz", training: "beim Training", sleep: "beim Schlaf", hydration: "beim Trinken",
+        protein: "beim Protein", wellbeing: "beim Wohlbefinden", substances: "bei tabakfreien Tagen" },
+      cmp_m: { complete_days_pct: "Vollständige Check-ins", streak_current: "Aktuelle Serie", streak_longest: "Längste Serie",
+        plan_pct: "Einheiten vs. eigener Plan", active_min: "Aktive Minuten / Woche", strength_pct: "Kraftzuwachs (e1RM)",
+        sleep_h: "Schlaf Ø", nights_7h_pct: "Nächte ≥ 7 h", bedtime_sd_min: "Streuung der Bettzeit (SD)", sleep_quality: "Schlafqualität",
+        water_l: "Wasser Ø / Tag", protein_pct: "Protein vs. eigenes Ziel", energy: "Energie", mood: "Stimmung", stress: "Stress",
+        tobacco_free_days: "Tabakfreie Tage", tobacco_vs_baseline_pct: "Tabak vs. eigene Baseline" },
+      cmp_n: { days: ["{n} Tag", "{n} Tage"], nights: ["{n} Nacht", "{n} Nächte"], sessions: ["{n} Einheit", "{n} Einheiten"],
+        lifts: ["{n} Übung", "{n} Übungen"] },
+      cmp_days_unit: ["Tag", "Tage"], cmp_lower: "niedriger ist besser", cmp_lead: "vorn", cmp_metric: "Kennzahl",
+      cmp_leads: "{name} führt {in} – {vals}", cmp_tie: "Gleichauf {in} – {vals}", cmp_met: "Beide im Plan {in} – {vals}",
+      cmp_all_met: "Alle im Plan {in} – {vals}", cmp_solo: "Nur {name} teilt das", cmp_vs: " vs. ",
+      cmp_no_week: "Diese Woche noch keine Einträge", cmp_no_values: "Noch keine Werte in diesem Zeitraum",
+      cmp_waiting: "Der Vergleich startet zu zweit",
+      cmp_waiting_text: ["Er schaltet sich ein, sobald {names} das Onboarding abgeschlossen hat. Bis dahin zeigt dieser Tab die Bilanz von allen, die schon teilen.",
+        "Er schaltet sich ein, sobald {names} das Onboarding abgeschlossen haben. Bis dahin zeigt dieser Tab die Bilanz von allen, die schon teilen."],
+      cmp_and: " und ",
+      cmp_waiting_share: "Er schaltet sich ein, sobald eine zweite Person etwas freigibt (settings.json → compare.share).",
+      cmp_foot: "Verglichen wird, was jede Person freigibt – Gewicht und Körpermaße nie.",
+      cmp_foot_setting: "Freigaben wählst du in settings.json → compare.share (zusätzlich wählbar: Wohlbefinden, Konsum).",
+      cmp_cap_note: "Planwerte zählen bis 100 % (Schlaf bis 8 h) – darüber ist der Plan für alle erfüllt.",
+      cmp_excluded: "Nicht im Vergleich: {names}",
+      cmp_note: { all_must_share: "Tabakfreie Tage erscheinen erst, wenn alle sie freigeben.",
+        no_training_plan: "{name}: noch kein Wochenplan fürs Training (training.sessions_per_week).",
+        no_protein_target: "{name}: noch kein Proteinziel (goals.protein_g_per_kg)." },
       triggers: {
         "?": "unbekannt", stress: "Stress", boredom: "Langeweile", "after-meal": "nach dem Essen",
         "break": "Pause", evening: "Abend", social: "sozial", habit: "Gewohnheit", craving: "Verlangen"
@@ -339,7 +402,7 @@
 
   var T = I18N.en;
   var TABS = [
-    { id: "today", de: "heute" }, { id: "body", de: "koerper" }, { id: "nutrition", de: "ernaehrung" },
+    { id: "today", de: "heute" }, { id: "compare", de: "vergleich", household: true }, { id: "body", de: "koerper" }, { id: "nutrition", de: "ernaehrung" },
     { id: "kitchen", de: "kueche" }, { id: "sleep", de: "schlaf" }, { id: "substances", de: "konsum" },
     { id: "training", de: "training" }, { id: "journal", de: "journal" }
   ];
@@ -355,7 +418,7 @@
   var COSTS = ["groceries", "out", "tobacco", "cannabis", "alcohol", "coffee"];
 
   var state = { period: null, data: null, tab: "today", panels: {}, themeVer: 0, loading: false, review: null,
-    profile: null, profiles: null };
+    profile: null, profiles: null, compare: null, compareLoading: null };
   // light/dark text on each member colour slot (contrast ≥ 4.5:1 on both themes' --c1…--c8)
   var COLOR_SLOTS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red"];
   var DARK_INK = { orange: 1, aqua: 1, yellow: 1, magenta: 1 };
@@ -2394,25 +2457,294 @@
   }
 
   // ------------------------------------------------------------------------------------------
+  // tab: compare (household) — habits and progress against each person's own plan, never body numbers
+  // ------------------------------------------------------------------------------------------
+
+  var SIGNED_METRICS = { strength_pct: 1, tobacco_vs_baseline_pct: 1 };
+
+  function short(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1).replace(/\s+$/, "") + "…" : s; }
+  function firstName(m) { return String(m.name || "").split(/\s+/)[0] || m.name; }
+  function nameList(ms) {
+    var n = ms.map(firstName);
+    return n.length < 2 ? n.join("") : n.slice(0, -1).join(", ") + T.cmp_and + n[n.length - 1];
+  }
+  function memberColor(P, m) { return P.c[Math.max(0, COLOR_SLOTS.indexOf(m.color))]; }
+  function plural(pair, n) { return tpl(pair[n === 1 ? 0 : 1], { n: num(n) }); }
+
+  function cmpVal(m, x) {
+    if (!x || !isNum(x.value)) return "–";
+    var v = x.value, nd = m.decimals || 0;
+    var s = SIGNED_METRICS[m.id] ? signed(v, nd) : num(v, nd);
+    if (x.capped) s = "≥ " + s;
+    if (m.unit === "%") return s + " %";
+    if (m.unit === "/5") return s + " / 5";
+    if (m.unit === "days") return s + " " + T.cmp_days_unit[v === 1 ? 0 : 1];
+    return s + " " + m.unit;
+  }
+
+  function cmpN(m, x) { return x && isNum(x.n) ? "n = " + plural(T.cmp_n[m.n_of] || T.cmp_n.days, x.n) : ""; }
+
+  function leadTag() {
+    var t = el("span", "cmp-lead");
+    t.appendChild(el("i", null, "🏅"));
+    t.appendChild(document.createTextNode(T.cmp_lead));
+    return t;
+  }
+
+  // Friendly one-liner: names only the leader, never the one behind.
+  function cmpSentence(g, m, byId) {
+    var ids = g.members.filter(function (id) { return m.values[id] && byId[id]; });
+    if (!ids.length) return null;
+    if (ids.length === 1) {
+      return g.members.length === 1 && Object.keys(byId).length > 1 ? tpl(T.cmp_solo, { name: firstName(byId[ids[0]]) }) : null;
+    }
+    var inG = T.cmp_in[g.id] || g.id;
+    if (m.leader && byId[m.leader]) {
+      var rest = ids.filter(function (id) { return id !== m.leader; });
+      return tpl(T.cmp_leads, { name: firstName(byId[m.leader]), "in": inG,
+        vals: [cmpVal(m, m.values[m.leader])].concat(rest.map(function (id) { return cmpVal(m, m.values[id]); })).join(T.cmp_vs) });
+    }
+    var all = ids.map(function (id) { return firstName(byId[id]) + " " + cmpVal(m, m.values[id]); }).join(" · ");
+    var met = m.rank_cap != null && ids.every(function (id) {
+      var v = m.values[id].value; return m.direction === "higher" ? v >= m.rank_cap : v <= m.rank_cap;
+    });
+    return tpl(met ? (ids.length === 2 ? T.cmp_met : T.cmp_all_met) : T.cmp_tie, { "in": inG, vals: all });
+  }
+
+  function cmpWeekCard(gEl, g, byId) {
+    var m = g.metrics[0];
+    var any = g.members.some(function (id) { return m.values[id]; });
+    addCard(gEl, { title: T.cmp_group[g.id] || g.id, sub: T.cmp_m[m.id] + (m.direction === "lower" ? " · " + T.cmp_lower : ""),
+      cls: "cmp-week", custom: function (card) {
+        var row = el("div", "cmp-people");
+        g.members.forEach(function (id) {
+          var mem = byId[id];
+          if (!mem) return;
+          var x = m.values[id], p = el("div", "cmp-person");
+          p.appendChild(avatar(mem));
+          var txt = el("div", "cmp-person-text");
+          var nm = el("div", "cmp-person-name", firstName(mem));
+          if (m.leader === id) nm.appendChild(leadTag());
+          txt.appendChild(nm);
+          txt.appendChild(el("div", "cmp-person-val", cmpVal(m, x)));
+          if (x) txt.appendChild(el("div", "cmp-person-meta", cmpN(m, x)));
+          p.appendChild(txt);
+          row.appendChild(p);
+        });
+        card.appendChild(row);
+        var s = any ? cmpSentence(g, m, byId) : T.cmp_no_week;
+        if (s) card.appendChild(el("p", "cmp-copy", s));
+      } });
+  }
+
+  function cmpRows(card, g, byId) {
+    var ul = el("ul", "rows cmp-rows");
+    g.metrics.forEach(function (m) {
+      var li = el("li");
+      var lab = el("div", "cmp-metric", T.cmp_m[m.id] || m.id);
+      if (m.direction === "lower") lab.appendChild(el("small", null, T.cmp_lower));
+      li.appendChild(lab);
+      var vals = el("div", "cmp-vals");
+      g.members.forEach(function (id) {
+        var mem = byId[id], x = m.values[id];
+        if (!mem) return;
+        var v = el("span", "cmp-val");
+        var a = avatar(mem, "sm");
+        a.removeAttribute("aria-hidden");
+        a.setAttribute("role", "img");
+        a.setAttribute("aria-label", mem.name);
+        a.title = mem.name;
+        v.appendChild(a);
+        v.appendChild(el("b", null, cmpVal(m, x)));
+        if (x) v.appendChild(el("small", null, plural(T.cmp_n[m.n_of] || T.cmp_n.days, x.n)));
+        if (m.leader === id) v.appendChild(leadTag());
+        vals.appendChild(v);
+      });
+      li.appendChild(vals);
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+  }
+
+  function cmpDetailCard(gEl, g, byId) {
+    var head = g.metrics[0], members = g.members.map(function (id) { return byId[id]; }).filter(Boolean);
+    var chartMs = g.metrics.filter(function (m) {
+      return m.unit === head.unit && members.some(function (mem) { return m.values[mem.id]; });
+    });
+    var card = addCard(gEl, { title: T.cmp_group[g.id] || g.id, sub: T.cmp_m[head.id], empty: !chartMs.length,
+      emptyText: T.cmp_no_values,
+      option: function (P) {
+        return {
+          grid: grid({ top: 30, right: 64 }),
+          legend: legend(P, members.map(function (mem) { return mem.name; })),
+          tooltip: tooltip(P, "axis", "shadow", function (ps) {
+            var m = chartMs[ps[0].dataIndex];
+            return tipHtml(T.cmp_m[m.id], members.map(function (mem) {
+              var x = m.values[mem.id];
+              return { color: memberColor(P, mem), label: mem.name, value: cmpVal(m, x) + (m.leader === mem.id ? " 🏅" : "") };
+            }), m.direction === "lower" ? T.cmp_lower : null);
+          }),
+          xAxis: yVal(P, { min: function (v) { return Math.min(0, v.min); }, axisLabel: { formatter: axisNum } }),
+          yAxis: { type: "category", inverse: true, data: chartMs.map(function (m) { return short(T.cmp_m[m.id], 18); }),
+            axisLine: { lineStyle: { color: P.axis } }, axisTick: { show: false },
+            axisLabel: { color: P.text2, fontSize: 11, show: chartMs.length > 1 } },
+          series: members.map(function (mem) {
+            var c = memberColor(P, mem);
+            return { name: mem.name, type: "bar", barMaxWidth: 14, barGap: "30%", barCategoryGap: "34%",
+              itemStyle: { color: c, borderRadius: [0, 4, 4, 0] }, emphasis: { itemStyle: { color: c } },
+              label: { show: true, position: "right", color: P.text2, fontSize: 11, formatter: function (p) {
+                var m = chartMs[p.dataIndex]; return cmpVal(m, m.values[mem.id]);
+              } },
+              data: chartMs.map(function (m) { var x = m.values[mem.id]; return x ? x.value : null; }) };
+          })
+        };
+      },
+      after: function (c) { cmpRows(c, g, byId); },
+      table: function () {
+        return { head: [T.cmp_metric].concat(members.map(function (mem) { return mem.name; })),
+          num: members.map(function (_, i) { return i + 1; }),
+          rows: g.metrics.map(function (m) {
+            return [T.cmp_m[m.id] + (m.direction === "lower" ? " (" + T.cmp_lower + ")" : "")].concat(members.map(function (mem) {
+              var x = m.values[mem.id];
+              return x ? cmpVal(m, x) + " · " + cmpN(m, x) + (m.leader === mem.id ? " · 🏅 " + T.cmp_lead : "") : "–";
+            }));
+          }) };
+      } });
+    var ch = card.querySelector(".chart");
+    if (ch) ch.style.height = (44 + chartMs.length * (members.length * 18 + 22)) + "px";
+  }
+
+  function cmpTrendCard(gEl, tm, weeks, byId) {
+    var ids = Object.keys(tm.values).filter(function (id) { return byId[id]; });
+    var m = { id: tm.id, unit: tm.unit, decimals: tm.decimals };
+    addCard(gEl, { title: T.cmp_m[tm.id], sub: T.cmp_group[tm.group], empty: weeks.length < 2 || !ids.length,
+      emptyText: T.cmp_no_values,
+      option: function (P) {
+        // direct labels: highest last value above its point, lowest below, others right
+        var last = ids.map(function (id) { var s = tm.values[id]; for (var i = s.length - 1; i >= 0; i--) if (isNum(s[i])) return s[i]; return null; });
+        var order = ids.slice().sort(function (a, b) { return (last[ids.indexOf(b)] || 0) - (last[ids.indexOf(a)] || 0); });
+        var series = ids.map(function (id) {
+          var mem = byId[id], c = memberColor(P, mem), rank = order.indexOf(id);
+          var pos = rank === 0 ? "top" : rank === order.length - 1 ? "bottom" : "right";
+          return line(mem.name, lastLabel(tm.values[id], { position: pos, distance: 6, color: c, fontSize: 11, fontWeight: 650,
+            formatter: function () { return mem.initials || firstName(mem); } }), c, { showSymbol: true, smooth: false });
+        });
+        if (tm.id === "plan_pct" && series.length) series[0].markLine = refLine(P, 100, T.plan, "insideStartTop");
+        return {
+          grid: grid({ top: 34, right: 18 }), legend: legend(P, ids.map(function (id) { return byId[id].name; })),
+          tooltip: tooltip(P, "axis", "line", function (ps) {
+            var w = weeks[ps[0].dataIndex];
+            return tipHtml(weekRange(w), ids.map(function (id) {
+              return { color: memberColor(P, byId[id]), label: byId[id].name, value: cmpVal(m, { value: tm.values[id][ps[0].dataIndex] }) };
+            }));
+          }),
+          xAxis: xCat(P, weeks.map(weekName)), yAxis: yVal(P, tm.unit === "h" ? pad(0.3) : { min: 0 }), series: series
+        };
+      },
+      table: function () {
+        return { head: [T.week].concat(ids.map(function (id) { return byId[id].name; })), num: ids.map(function (_, i) { return i + 1; }),
+          rows: weeks.map(function (w, wi) { return [weekRange(w)].concat(ids.map(function (id) { return cmpVal(m, { value: tm.values[id][wi] }); })); }) };
+      } });
+  }
+
+  function tabCompare(root, D) {
+    var C = state.compare;
+    if (!C || C.period.key !== D.period.key) {
+      root.appendChild(el("p", "muted-text cmp-loading", T.cmp_loading));
+      loadCompare(D.period.key);
+      return;
+    }
+    if (C.error) {
+      var bn = el("div", "banner");
+      bn.appendChild(el("b", null, T.load_error));
+      bn.appendChild(el("span", null, C.error));
+      root.appendChild(bn);
+      return;
+    }
+    var byId = {};
+    C.members.forEach(function (m) { byId[m.id] = m; });
+    var pending = C.excluded.filter(function (x) { return x.reason === "no_consent"; });
+    if (C.members.length < 2) {
+      var g0 = section(root, null, null, "grid-top");
+      addCard(g0, { title: T.cmp_waiting, cls: "onboard-card full", custom: function (card) {
+        var row = el("div", "onboard");
+        if (pending.length) row.appendChild(avatarStack(pending));
+        row.appendChild(el("p", null, pending.length
+          ? tpl(T.cmp_waiting_text[pending.length === 1 ? 0 : 1], { names: nameList(pending) }) : T.cmp_waiting_share));
+        card.appendChild(row);
+      } });
+    }
+    if (C.members.length) {
+      var wk = C.week;
+      var gw = section(root, T.cmp_week, tpl(T.cmp_week_sub, { wk: T.wk + wk.kw, from: fmtDay(wk.from, DAY_SHORT), to: fmtDay(wk.to, DAY_SHORT) }));
+      wk.groups.forEach(function (g) { cmpWeekCard(gw, g, byId); });
+      var gd = section(root, T.cmp_detail, tpl(T.cmp_detail_sub, { from: fmtDay(C.period.from, DAY_SHORT), to: fmtDay(C.period.to, DAY_SHORT) }));
+      C.groups.forEach(function (g) { cmpDetailCard(gd, g, byId); });
+      var weeks = C.trends.weeks.map(function (w) { return { from: w.from, to: w.to, kw: w.kw }; });
+      if (C.trends.metrics.length && weeks.length >= 2) {
+        var gt = section(root, T.cmp_trend, T.cmp_trend_sub);
+        C.trends.metrics.forEach(function (tm) { cmpTrendCard(gt, tm, weeks, byId); });
+      }
+    }
+    var foot = el("div", "cmp-foot");
+    foot.appendChild(el("p", "cmp-foot-main", T.cmp_foot));
+    foot.appendChild(el("p", null, T.cmp_foot_setting));
+    foot.appendChild(el("p", null, T.cmp_cap_note));
+    var notes = (C.notes || []).map(function (n) {
+      var t = T.cmp_note[n.key];
+      return t ? tpl(t, { name: n.member && byId[n.member] ? firstName(byId[n.member]) : "" }) : null;
+    }).filter(Boolean);
+    if (C.excluded.length) notes.push(tpl(T.cmp_excluded, { names: nameList(C.excluded) }));
+    notes.forEach(function (n) { foot.appendChild(el("p", null, n)); });
+    root.appendChild(foot);
+  }
+
+  function loadCompare(key) {
+    if (state.compareLoading === key) return;
+    state.compareLoading = key;
+    fetch("api/compare?days=" + encodeURIComponent(key), { cache: "no-store" }).then(function (r) {
+      return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; });
+    }).then(function (C) { state.compare = C; }, function (e) {
+      state.compare = { error: String(e.message || e), period: { key: key } };
+    }).then(function () {
+      state.compareLoading = null;
+      if (!state.data || state.data.period.key !== key) return;
+      var p = state.panels.compare;
+      if (!p) return;
+      p.charts.forEach(function (c) { if (c.inst) c.inst.dispose(); });
+      p.charts = [];
+      p.built = false;
+      if (state.tab === "compare") showTab("compare");
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
   // tabs, routing, page
   // ------------------------------------------------------------------------------------------
 
-  var BUILDERS = { today: tabToday, body: tabBody, nutrition: tabNutrition, kitchen: tabKitchen, sleep: tabSleep,
+  var BUILDERS = { today: tabToday, compare: tabCompare, body: tabBody, nutrition: tabNutrition, kitchen: tabKitchen, sleep: tabSleep,
     substances: tabSubstances, training: tabTraining, journal: tabJournal };
 
   function lang() { return T === I18N.de ? "de" : "en"; }
   function slugFor(id) { var t = TABS.filter(function (x) { return x.id === id; })[0]; return lang() === "de" ? t.de : t.id; }
 
+  // The compare tab exists only in household mode.
+  function visibleTabs() {
+    var hh = state.data ? !!state.data.household : !!(state.profiles && state.profiles.household);
+    return TABS.filter(function (t) { return !t.household || hh; });
+  }
+
   function tabFromHash() {
     var h = decodeURIComponent((location.hash || "").replace(/^#\/?/, "")).toLowerCase();
-    return ALIAS[h] || "today";
+    var id = ALIAS[h] || "today";
+    return visibleTabs().some(function (t) { return t.id === id; }) ? id : "today";
   }
 
   function buildTabBar() {
     var nav = document.getElementById("tabs");
     nav.innerHTML = "";
     nav.setAttribute("aria-label", T.tabs_label);
-    TABS.forEach(function (t) {
+    visibleTabs().forEach(function (t) {
       var a = el("a", "tab");
       a.href = "#" + slugFor(t.id);
       a.id = "tab-" + t.id;
@@ -2454,16 +2786,16 @@
   function buildPanel(id, p) {
     var D = state.data;
     p.el.innerHTML = "";
-    if (id === "kitchen" && D.household) p.el.appendChild(householdStrip(D.household));
+    if ((id === "kitchen" || id === "compare") && D.household) p.el.appendChild(householdStrip(D.household));
     var q = el("p", "question", T.q[id]);
     p.el.appendChild(q);
-    if (D.profile && D.profile.consent === false && id !== "kitchen") {
+    if (D.profile && D.profile.consent === false && id !== "kitchen" && id !== "compare") {
       building = p;
       try { tabNoConsent(p.el, D, id); } finally { building = null; }
       p.built = true;
       return;
     }
-    if (!D.period.days_logged && id !== "journal" && id !== "kitchen") {
+    if (!D.period.days_logged && id !== "journal" && id !== "kitchen" && id !== "compare") {
       var bn = el("div", "banner");
       bn.appendChild(el("b", null, T.no_entries));
       bn.appendChild(el("span", null, T.no_entries_hint));
@@ -2567,6 +2899,7 @@
       var err = document.getElementById("error");
       if (err) err.remove();
       state.data = D;
+      state.compare = null; // rebuilt live on every reload, like /api/data
       state.period = D.period.key;
       render(D);
     }).catch(function (e) {
@@ -2634,8 +2967,8 @@
   window.addEventListener("hashchange", function () { showTab(tabFromHash(), true); });
   document.getElementById("tabs").addEventListener("keydown", function (e) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    var i = TABS.map(function (t) { return t.id; }).indexOf(state.tab);
-    var n = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+    var vis = visibleTabs(), i = vis.map(function (t) { return t.id; }).indexOf(state.tab);
+    var n = vis[(i + (e.key === "ArrowRight" ? 1 : vis.length - 1)) % vis.length];
     location.hash = slugFor(n.id);
     var a = document.getElementById("tab-" + n.id);
     if (a) a.focus();

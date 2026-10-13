@@ -913,7 +913,8 @@ class TestFoodsImport(unittest.TestCase):
 # --------------------------------------------------------------------------------------------
 
 class TempHousehold(unittest.TestCase):
-    """A temp copy of examples/demo-household: base/household + base/people/{alex,sam}."""
+    """A temp copy of examples/demo-household: base/household + base/people/{alex,sam,robin}
+    (alex and sam consented; robin has not done the interview yet)."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bos-hh-")
@@ -958,13 +959,14 @@ class TestHouseholdPaths(TempHousehold):
         self.assertEqual(c.settings["household"]["portions_default"], 2)   # shared key from household
         self.assertEqual(c.settings["goals"]["protein_g_per_kg"], [1.6, 2.0])  # personal key from member
         self.assertEqual(c.settings["costs"]["tobacco_eur_per_g"], 0.35)   # costs merged, not replaced
-        sam = self.ctx("sam")
-        self.assertFalse(sam.consent)
-        self.assertEqual(sam.pantry_path, c.pantry_path)
+        robin = self.ctx("robin")
+        self.assertFalse(robin.consent)
+        self.assertTrue(self.ctx("sam").consent)
+        self.assertEqual(robin.pantry_path, c.pantry_path)
         with self.assertRaises(bos.BosError):
             self.ctx("nobody")
         # same pantry for both members via the CLI
-        for p in ("alex", "sam"):
+        for p in ("alex", "sam", "robin"):
             code, out, _ = self.bos("pantry", "--json", profile=p)
             self.assertEqual(code, 0)
             self.assertEqual(len(json.loads(out)), 14)
@@ -998,17 +1000,159 @@ class TestHouseholdPaths(TempHousehold):
                 self.ctx()
 
     def test_dashboard_data_for_member_without_consent_has_no_personal_data(self):
-        d = bos.dashboard_data(self.ctx("sam"), "30")
-        self.assertEqual(d["profile"]["id"], "sam")
+        d = bos.dashboard_data(self.ctx("robin"), "30")
+        self.assertEqual(d["profile"]["id"], "robin")
         self.assertFalse(d["profile"]["consent"])
         self.assertEqual(d["period"]["days_logged"], 0)
         self.assertEqual(d["tabs"]["journal"]["reviews"], [])
         self.assertTrue(d["tabs"]["kitchen"]["pantry"])
         self.assertTrue(d["tabs"]["kitchen"]["shared"])
-        self.assertEqual([m["id"] for m in d["household"]["members"]], ["alex", "sam"])
+        self.assertEqual([m["id"] for m in d["household"]["members"]], ["alex", "sam", "robin"])
         a = bos.dashboard_data(self.ctx("alex"), "30")
         self.assertGreater(a["period"]["days_logged"], 10)
         self.assertEqual(a["tabs"]["kitchen"]["pantry"], d["tabs"]["kitchen"]["pantry"])
+
+
+FORBIDDEN_COMPARE = ("kg", "weight", "kcal", "waist", "bp", "lab", "sys", "dia")
+
+
+def _walk(obj, keys, nums):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            keys.add(str(k).lower())
+            _walk(v, keys, nums)
+    elif isinstance(obj, list):
+        for v in obj:
+            _walk(v, keys, nums)
+    elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
+        nums.add(round(float(obj), 2))
+
+
+class TestCompare(TempHousehold):
+    def assert_no_body_numbers(self, data, weights):
+        keys, nums = set(), set()
+        _walk(data, keys, nums)
+        bad = [k for k in keys for f in FORBIDDEN_COMPARE if f in re.split(r"[_\W]+", k)]
+        self.assertEqual(bad, [])
+        for w in weights:  # whole-number weights could equal a percentage by chance; fractional ones cannot
+            if float(w) != int(w):
+                self.assertNotIn(round(float(w), 2), nums)
+        self.assertNotIn('"kg"', json.dumps(data))
+
+    def member(self, pid, settings, events, consent=True):
+        d = os.path.join(self.base, "people", pid)
+        os.makedirs(os.path.join(d, "log", "2026"), exist_ok=True)
+        bos.write_json_file(os.path.join(d, "settings.json"), dict({"timezone": "Europe/Berlin"}, **settings))
+        with open(os.path.join(d, "log", "2026", "2026-10.jsonl"), "w") as f:
+            for i, e in enumerate(events):
+                f.write(json.dumps(dict(e, id="%s-%d" % (e["type"], i))) + "\n")
+        return {"id": pid, "name": pid.upper() + " Test", "color": "blue", "path": "people/" + pid, "consent": consent}
+
+    @staticmethod
+    def days_events(sleep_h, water_ml, weight, protein, trainings, checkin=None, tobacco=0):
+        evs = []
+        for i in range(7):  # 2026-10-07 .. 2026-10-13
+            d = dt.date(2026, 10, 7) + dt.timedelta(days=i)
+            bed = dt.datetime.combine(d, dt.time(7, 0)) - dt.timedelta(hours=sleep_h)
+            day = d.isoformat()
+            evs += [{"type": "sleep", "ts": day + "T07:00:00+02:00", "bed": bed.strftime("%Y-%m-%dT%H:%M:00+02:00"),
+                     "wake": day + "T07:00:00+02:00", "quality": 4},
+                    {"type": "weight", "ts": day + "T07:10:00+02:00", "kg": weight},
+                    {"type": "meal", "ts": day + "T12:00:00+02:00", "slot": "lunch", "kcal": 711, "protein_g": protein / 2},
+                    {"type": "meal", "ts": day + "T19:00:00+02:00", "slot": "dinner", "kcal": 733, "protein_g": protein / 2},
+                    {"type": "drink", "ts": day + "T10:00:00+02:00", "kind": "water", "ml": water_ml}]
+            if checkin:
+                evs.append(dict({"type": "checkin", "ts": day + "T21:00:00+02:00"}, **checkin))
+            for k in range(tobacco):
+                evs.append({"type": "substance", "ts": day + "T1%d:00:00+02:00" % (k % 10), "kind": "cigarette", "tobacco": True})
+        for day in trainings:
+            evs.append({"type": "training", "ts": day + "T18:00:00+02:00", "kind": "run", "dur_min": 30})
+        return evs
+
+    def test_demo_household(self):
+        d = bos.compare_data(self.ctx("sam"), "14")  # same result whoever asks
+        self.assertEqual([m["id"] for m in d["members"]], ["alex", "sam"])
+        self.assertEqual([(x["id"], x["reason"]) for x in d["excluded"]], [("robin", "no_consent")])
+        self.assertEqual([g["id"] for g in d["groups"]],
+                         ["consistency", "training", "sleep", "hydration", "protein", "wellbeing"])
+        self.assertIn({"key": "all_must_share", "group": "substances"}, d["notes"])  # alex shares it, sam not
+        self.assertEqual([g["id"] for g in d["week"]["groups"]], [g["id"] for g in d["groups"]])
+        self.assertEqual([m["id"] for m in d["trends"]["metrics"]], ["plan_pct", "sleep_h", "complete_days_pct"])
+        for g in d["groups"]:
+            self.assertEqual(g["members"], ["alex", "sam"])
+            for m in g["metrics"]:
+                self.assertTrue(set(m["values"]) <= {"alex", "sam"})
+                self.assertIn(m["leader"], (None, "alex", "sam"))
+                for x in m["values"].values():
+                    self.assertTrue(bos.is_int(x["n"]) and x["n"] >= 0)
+        sleep = {m["id"]: m for m in next(g for g in d["groups"] if g["id"] == "sleep")["metrics"]}
+        self.assertEqual(sleep["bedtime_sd_min"]["direction"], "lower")
+        self.assertEqual(sleep["bedtime_sd_min"]["leader"], "sam")  # demo: sam keeps a regular bedtime
+        weights = [e["kg"] for pid in ("alex", "sam") for e in bos.Ctx(None, self.data, DEMO_TODAY, self.hh, pid).log_events()
+                   if e.get("type") == "weight"]
+        self.assertTrue(weights)
+        self.assert_no_body_numbers(d, weights)
+        with self.assertRaises(bos.BosError):
+            bos.compare_data(self.ctx(), "7")
+
+    def test_leaders_ties_consent_and_opt_in(self):
+        a = self.member("aa", {"training": {"sessions_per_week": 2}, "nutrition": {"targets": {"protein_g": 100}},
+                               "phases": [{"id": "baseline", "name": "B", "from": "2026-10-07", "to": "2026-10-09"}],
+                               "compare": {"share": ["consistency", "training", "sleep", "hydration", "protein",
+                                                     "wellbeing", "substances"]}},
+                        self.days_events(8, 2000, 70.4, 80, ["2026-10-08", "2026-10-10", "2026-10-12"],
+                                         {"energy": 4, "mood": 4, "stress": 2}))
+        b = self.member("bb", {"training": {"sessions_per_week": 2}, "goals": {"protein_g_per_kg": [1.0, 1.0]}},
+                        self.days_events(7, 2000, 90.6, 90, ["2026-10-09", "2026-10-12"]))  # no compare key: default share
+        c = self.member("cc", {"compare": {"share": list(bos.COMPARE_GROUPS)}},
+                        self.days_events(9, 3000, 66.6, 150, ["2026-10-08"]), consent=False)
+        hh = {"schema": 1, "name": "T", "members": [a, b, c], "default_member": "aa"}
+        bos.write_json_file(os.path.join(self.hh, "household.json"), hh)
+
+        d = bos.compare_data(self.ctx(), "14")
+        self.assertEqual([m["id"] for m in d["members"]], ["aa", "bb"])
+        self.assertEqual(d["excluded"], [{"id": "cc", "name": "CC Test", "color": "blue", "initials": "CT",
+                                          "reason": "no_consent"}])
+        groups = {g["id"]: g for g in d["groups"]}
+        self.assertNotIn("substances", groups)            # opt-in: only when every compared member shares it
+        self.assertEqual(groups["wellbeing"]["members"], ["aa"])  # shown for the member who shares it ...
+        self.assertTrue(all(m["leader"] is None for m in groups["wellbeing"]["metrics"]))  # ... never ranked alone
+        met = {m["id"]: m for g in d["groups"] for m in g["metrics"]}
+        self.assertNotIn("cc", json.dumps([m["values"] for m in met.values()]))
+        self.assertEqual((met["sleep_h"]["values"]["aa"]["value"], met["sleep_h"]["values"]["bb"]["value"]), (8.0, 7.0))
+        self.assertEqual(met["sleep_h"]["leader"], "aa")
+        self.assertEqual(met["sleep_h"]["values"]["aa"]["n"], 7)
+        self.assertEqual(met["water_l"]["values"]["aa"]["value"], met["water_l"]["values"]["bb"]["value"])
+        self.assertIsNone(met["water_l"]["leader"])        # tie -> no lead
+        self.assertEqual((met["plan_pct"]["values"]["aa"]["value"], met["plan_pct"]["values"]["bb"]["value"]), (150, 100))
+        self.assertIsNone(met["plan_pct"]["leader"])       # both met their own plan -> no lead
+        self.assertEqual((met["protein_pct"]["values"]["aa"]["value"], met["protein_pct"]["values"]["bb"]["value"]), (80, 99))
+        self.assertEqual(met["protein_pct"]["leader"], "bb")  # relative to each own target, not grams
+        # default checklist (weight, sleep, meals>=2, checkin): bb never logs a check-in
+        self.assertEqual((met["complete_days_pct"]["values"]["aa"]["value"], met["complete_days_pct"]["values"]["bb"]["value"]),
+                         (100, 0))
+        self.assertEqual(met["complete_days_pct"]["values"]["aa"]["n"], 7)  # days before the first log don't count
+        self.assertEqual((met["streak_current"]["values"]["aa"]["value"], met["streak_current"]["leader"]), (7, "aa"))
+        self.assert_no_body_numbers(d, [70.4, 90.6, 66.6, 711, 733])
+
+        st = os.path.join(self.base, "people", "bb", "settings.json")
+        bos.write_json_file(st, dict(bos.read_json_file(st), compare={"share": ["sleep", "substances"]}))
+        d = bos.compare_data(self.ctx(), "14")
+        groups = {g["id"]: g for g in d["groups"]}
+        self.assertEqual(groups["substances"]["members"], ["aa", "bb"])
+        self.assertEqual(groups["training"]["members"], ["aa"])
+        free = {m["id"]: m for m in groups["substances"]["metrics"]}["tobacco_free_days"]
+        self.assertEqual((free["values"]["aa"]["value"], free["values"]["bb"]["value"], free["leader"]), (7, 7, None))
+
+        # nutrition numbers off (SAFETY.md §2): protein is never shared; an empty share leaves the comparison
+        bos.write_json_file(st, dict(bos.read_json_file(st), nutrition={"show_numbers": False},
+                                     compare={"share": ["protein"]}))
+        d = bos.compare_data(self.ctx(), "14")
+        self.assertEqual([m["id"] for m in d["members"]], ["aa"])
+        self.assertEqual([(x["id"], x["reason"]) for x in d["excluded"]], [("bb", "not_shared"), ("cc", "no_consent")])
+
+    def test_single_user_has_no_comparison(self):
+        self.assertIsNone(bos.compare_data(bos.Ctx(os.path.join(self.base, "people", "alex"), self.data, DEMO_TODAY), "14"))
 
 
 class InitBase(unittest.TestCase):
@@ -1037,25 +1181,25 @@ class InitBase(unittest.TestCase):
 
 class TestConsentGate(TempHousehold):
     def test_explicit_me_of_a_member_still_enforces_consent(self):
-        sam = os.path.join(self.base, "people", "sam")
+        robin = os.path.join(self.base, "people", "robin")
         with mock.patch.object(bos, "DEFAULT_HOUSEHOLD", self.hh):
-            c = bos.Ctx(sam, self.data, DEMO_TODAY)
-            self.assertEqual((c.profile_id, c.consent), ("sam", False))
-            code, _, err = run("--me", sam, "--data", self.data, "log", "--dry-run", '{"type": "weight", "kg": 60}')
+            c = bos.Ctx(robin, self.data, DEMO_TODAY)
+            self.assertEqual((c.profile_id, c.consent), ("robin", False))
+            code, _, err = run("--me", robin, "--data", self.data, "log", "--dry-run", '{"type": "weight", "kg": 60}')
             self.assertEqual(code, 2)
             self.assertIn("has not consented", err)
             other = os.path.join(self.tmp, "elsewhere")
             self.assertIsNone(bos.Ctx(other, self.data, DEMO_TODAY).household)  # unrelated --me: single-user
 
     def test_no_personal_settings_before_consent_and_no_member_no_writes(self):
-        st = os.path.join(self.base, "people", "sam", "settings.json")
+        st = os.path.join(self.base, "people", "robin", "settings.json")
         with open(st) as f:
             d = json.load(f)
         d["goals"] = {"protein_g_per_kg": [1.6, 2.0]}
         d["phases"] = [{"id": "baseline", "name": "Secret", "from": "2026-10-01"}]
         with open(st, "w") as f:
             json.dump(d, f)
-        data = bos.dashboard_data(self.ctx("sam"), "30")
+        data = bos.dashboard_data(self.ctx("robin"), "30")
         self.assertNotIn("Secret", json.dumps(data))
         self.assertIsNone(data["tabs"]["today"]["phase"])
         hj = os.path.join(self.hh, "household.json")
@@ -1217,11 +1361,11 @@ class TestLanServer(TempHousehold):
         p = json.loads(body)
         self.assertEqual(p["default"], "alex")
         self.assertEqual([(m["id"], m["color"], m["consent"], m["initials"]) for m in p["members"]],
-                         [("alex", "blue", True, "AD"), ("sam", "orange", False, "S")])
+                         [("alex", "blue", True, "AD"), ("sam", "orange", True, "S"), ("robin", "aqua", False, "R")])
         self.assertNotIn("path", p["members"][0])  # folder layout stays on the server
-        code, _, body = self.get("/api/data?profile=sam&days=14")
+        code, _, body = self.get("/api/data?profile=robin&days=14")
         d = json.loads(body)
-        self.assertEqual((code, d["profile"]["id"], d["period"]["days_logged"]), (200, "sam", 0))
+        self.assertEqual((code, d["profile"]["id"], d["period"]["days_logged"]), (200, "robin", 0))
         self.assertTrue(d["tabs"]["kitchen"]["pantry"])
         code, _, body = self.get("/api/data?profile=alex&days=14")
         self.assertGreater(json.loads(body)["period"]["days_logged"], 0)
@@ -1229,7 +1373,7 @@ class TestLanServer(TempHousehold):
         self.assertEqual(self.get("/api/data?profile=nobody")[0], 404)
         self.assertEqual(self.get("/api/data?profile=../alex")[0], 404)
         self.assertEqual(self.get("/api/review?profile=alex&file=2026-W41.md")[0], 200)
-        self.assertEqual(self.get("/api/review?profile=sam&file=2026-W41.md")[0], 404)
+        self.assertEqual(self.get("/api/review?profile=robin&file=2026-W41.md")[0], 404)
         self.assertEqual(self.get("/api/review?profile=nobody&file=2026-W41.md")[0], 404)
         self.assertEqual(self.get("/devices")[0], 200)
         code, _, body = self.get("/api/devices")
@@ -1276,6 +1420,23 @@ class TestLanServer(TempHousehold):
         bos.ensure_server_key(self.key_path, rotate=True)
         self.assertEqual(self.get("/", cookie=good)[0], 401)  # rotation takes effect without restart
 
+    def test_compare_api(self):
+        code, h, body = self.get("/api/compare?days=14")
+        self.assertEqual((code, h["content-type"]), (200, "application/json; charset=utf-8"))
+        d = json.loads(body)
+        self.assertEqual(([m["id"] for m in d["members"]], d["period"]["days"]), (["alex", "sam"], 14))
+        self.assertNotIn("path", d["members"][0])
+        self.assertEqual(json.loads(self.get("/api/compare")[2])["period"]["key"], "30")  # server default
+        self.assertEqual(self.get("/api/compare?days=7")[0], 400)
+        key = bos.ensure_server_key(self.key_path)
+        self.srv.is_local = lambda ip: False  # a phone in the LAN: same key rule as everything else
+        code, _, body = self.get("/api/compare?days=14")
+        self.assertEqual(code, 401)
+        self.assertNotIn(b"alex", body)
+        self.assertEqual(self.get("/api/compare?days=14", cookie="bos_key=" + key)[0], 200)
+        self.assertEqual(self.get("/api/compare?days=14", host="evil.example:%d" % self.port,
+                                  cookie="bos_key=" + key)[0], 403)
+
     def test_host_check_allows_this_machines_names(self):
         p = self.port
         for host in ("localhost:%d" % p, "127.0.0.1:%d" % p, "[::1]:%d" % p, "%s:%d" % (bos.local_hostnames()[0], p)):
@@ -1315,6 +1476,7 @@ class TestLanServer(TempHousehold):
             self.assertEqual(([m["id"] for m in p["members"]], p["household"]), (["me"], None))
             self.assertEqual(json.loads(self.get("/api/data?profile=me")[2])["profile"]["id"], "me")
             self.assertEqual(self.get("/api/data?profile=alex")[0], 404)
+            self.assertEqual(self.get("/api/compare?days=14")[0], 404)  # the comparison needs household mode
         finally:
             self.port = old
             srv.shutdown()

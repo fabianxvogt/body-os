@@ -1910,6 +1910,47 @@ def _mean_n(xs):
     return {"mean": _r(statistics.mean(xs)) if xs else None, "n": len(xs)}
 
 
+def checklist_items(settings):
+    """[(key, event type, minimum count)] from settings.checklist (default DASHBOARD_CHECKLIST)."""
+    out = []
+    for item in _list(settings.get("checklist")) or list(DASHBOARD_CHECKLIST):
+        m = re.match(r"^\s*([a-z_]+)\s*(?:>=\s*(\d+))?\s*$", str(item))
+        if not m:
+            continue
+        typ = CHECK_ALIASES.get(m.group(1), m.group(1))
+        if typ in LOG_TYPES:
+            out.append((m.group(1), typ, int(m.group(2) or 1)))
+    return out
+
+
+def main_sleep(sleep_events):
+    """(bed, wake) as naive wall-clock datetimes of the longest sleep with valid bed/wake, else None."""
+    main = None
+    for e in sleep_events:
+        try:
+            b, w = _local_dt(e["bed"]), _local_dt(e["wake"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if main is None or (w - b) > (main[1] - main[0]):
+            main = (b, w)
+    return main
+
+
+def protein_target(settings, events):
+    """(band [lo, hi|None], basis|None): goals.protein_g_per_kg × latest 7-day weight, else nutrition.targets."""
+    per_kg = _dict(settings.get("goals")).get("protein_g_per_kg")
+    ntargets = _dict(_dict(settings.get("nutrition")).get("targets"))
+    wdays = [event_day(e) for e in events if e.get("type") == "weight" and is_num(e.get("kg"))]
+    ref_w = weight_trend(events, max(wdays)) if wdays else None
+    if isinstance(per_kg, list) and len(per_kg) == 2 and all(is_num(x) for x in per_kg) and ref_w:
+        return ([round(min(per_kg) * ref_w), round(max(per_kg) * ref_w)],
+                {"g_per_kg": [min(per_kg), max(per_kg)], "weight_kg": _r(ref_w, 1)})
+    band = _band(ntargets.get("protein_g")) or (
+        [ntargets["protein_g_min"], ntargets.get("protein_g_max") if is_num(ntargets.get("protein_g_max")) else None]
+        if is_num(ntargets.get("protein_g_min")) else None)
+    return band, None
+
+
 def dashboard_data(ctx, days="30"):
     """JSON-ready dict for the local dashboard, grouped by tab. days: 14/30/90 or 'all' (str or int).
 
@@ -2008,20 +2049,14 @@ def dashboard_data(ctx, days="30"):
     t = daily_aggregates(events, [to])[to]
     tg = t["_events"]
     checklist = []
-    for item in _list(settings.get("checklist")) or list(DASHBOARD_CHECKLIST):
-        m = re.match(r"^\s*([a-z_]+)\s*(?:>=\s*(\d+))?\s*$", str(item))
-        if not m:
-            continue
-        typ = CHECK_ALIASES.get(m.group(1), m.group(1))
-        if typ not in LOG_TYPES:
-            continue
-        need, n = int(m.group(2) or 1), len(tg[typ])
+    for ckey, typ, need in checklist_items(settings):
+        n = len(tg[typ])
         value = None
         if typ == "weight" and n:
             value = t["weight_kg"]
         elif typ == "sleep" and t["sleep_h"] is not None:
             value = _r(t["sleep_h"], 1)
-        checklist.append({"key": m.group(1), "type": typ, "min": need, "n": n, "done": n >= need, "value": value})
+        checklist.append({"key": ckey, "type": typ, "min": need, "n": n, "done": n >= need, "value": value})
     subs_today = None
     if "substances" in modules or any(e.get("type") == "substance" for e in events):
         subs_today = {"n": t["substance_n"], "tobacco_n": t["tobacco_n"], "last": t["last_substance"]}
@@ -2125,19 +2160,7 @@ def dashboard_data(ctx, days="30"):
     # ---------------------------------------------------------------- nutrition
     nutrition = _dict(settings.get("nutrition"))
     ntargets = _dict(nutrition.get("targets"))
-    protein_t, protein_basis = None, None
-    per_kg = goals.get("protein_g_per_kg")
-    ref_w = None
-    for d in reversed([d for d in all_days if d in weights]):
-        ref_w = trend(d)
-        break
-    if isinstance(per_kg, list) and len(per_kg) == 2 and all(is_num(x) for x in per_kg) and ref_w:
-        protein_t = [round(min(per_kg) * ref_w), round(max(per_kg) * ref_w)]
-        protein_basis = {"g_per_kg": [min(per_kg), max(per_kg)], "weight_kg": _r(ref_w, 1)}
-    else:
-        protein_t = _band(ntargets.get("protein_g")) or (
-            [ntargets["protein_g_min"], ntargets.get("protein_g_max") if is_num(ntargets.get("protein_g_max")) else None]
-            if is_num(ntargets.get("protein_g_min")) else None)
+    protein_t, protein_basis = protein_target(settings, events)
     kcal_t = _band(ntargets.get("kcal")) or (
         [ntargets["kcal_min"], ntargets.get("kcal_max") if is_num(ntargets.get("kcal_max")) else None]
         if is_num(ntargets.get("kcal_min")) else None)
@@ -2242,14 +2265,7 @@ def dashboard_data(ctx, days="30"):
         if r["sleep_h"] is None:
             continue
         anchor = dt.datetime.combine(d - dt.timedelta(days=1), dt.time(20, 0))
-        main = None
-        for e in r["_events"]["sleep"]:
-            try:
-                b, w = _local_dt(e["bed"]), _local_dt(e["wake"])
-            except (KeyError, ValueError, TypeError):
-                continue
-            if main is None or (w - b) > (main[1] - main[0]):
-                main = (b, w)
+        main = main_sleep(r["_events"]["sleep"])
         if main:
             nights.append({"day": d.isoformat(), "bed": main[0].strftime("%H:%M"), "wake": main[1].strftime("%H:%M"),
                            "bed_min": int((main[0] - anchor).total_seconds() // 60),
@@ -2497,6 +2513,284 @@ def bp_category(sys_, dia):
     return "optimal"
 
 
+# --------------------------------------------------------------------------------------------
+# household comparison: habits and progress relative to each member's own plan, never body numbers
+# --------------------------------------------------------------------------------------------
+
+COMPARE_GROUPS = ("consistency", "training", "sleep", "hydration", "protein", "wellbeing", "substances")
+COMPARE_DEFAULT_SHARE = ("consistency", "training", "sleep", "hydration", "protein")
+COMPARE_ALL_MUST_SHARE = ("substances",)  # shown only when every compared member shares it
+COMPARE_DISPLAY_CAP = 150  # plan-relative percentages are reported up to this value ("capped": true)
+# (id, group, direction, unit, decimals, what n counts, rank cap: at/above it counts as "plan met" -> tie)
+COMPARE_METRICS = (
+    ("complete_days_pct", "consistency", "higher", "%", 0, "days", None),
+    ("streak_current", "consistency", "higher", "days", 0, "days", None),
+    ("streak_longest", "consistency", "higher", "days", 0, "days", None),
+    ("plan_pct", "training", "higher", "%", 0, "sessions", 100),
+    ("active_min", "training", "higher", "min", 0, "sessions", None),
+    ("strength_pct", "training", "higher", "%", 1, "lifts", None),
+    ("sleep_h", "sleep", "higher", "h", 1, "nights", 8),
+    ("nights_7h_pct", "sleep", "higher", "%", 0, "nights", None),
+    ("bedtime_sd_min", "sleep", "lower", "min", 0, "nights", None),
+    ("sleep_quality", "sleep", "higher", "/5", 1, "nights", None),
+    ("water_l", "hydration", "higher", "L", 1, "days", None),
+    ("protein_pct", "protein", "higher", "%", 0, "days", 100),
+    ("energy", "wellbeing", "higher", "/5", 1, "days", None),
+    ("mood", "wellbeing", "higher", "/5", 1, "days", None),
+    ("stress", "wellbeing", "lower", "/5", 1, "days", None),
+    ("tobacco_free_days", "substances", "higher", "days", 0, "days", None),
+    ("tobacco_vs_baseline_pct", "substances", "lower", "%", 0, "days", None),
+)
+COMPARE_TRENDS = (("plan_pct", "training"), ("sleep_h", "sleep"), ("complete_days_pct", "consistency"))
+
+
+def compare_share(settings):
+    """Groups a member shares (settings.compare.share; default COMPARE_DEFAULT_SHARE). Protein is never
+    shared while nutrition numbers are switched off (SAFETY.md §2)."""
+    cfg = settings.get("compare")
+    share = _dict(cfg).get("share", list(COMPARE_DEFAULT_SHARE)) if cfg is not None else list(COMPARE_DEFAULT_SHARE)
+    out = [g for g in COMPARE_GROUPS if g in _list(share)]
+    if _dict(settings.get("nutrition")).get("show_numbers") is False and "protein" in out:
+        out.remove("protein")
+    return out
+
+
+class _CompareMember:
+    """Per-member daily rows from the first logged day to today, and plan-relative metrics for any days."""
+
+    def __init__(self, c):
+        self.settings = c.settings if isinstance(c.settings, dict) else {}
+        self.today = c.today
+        self.events = [e for e in c.log_events() if event_day(e) is not None and event_day(e) <= c.today]
+        self.first = min((event_day(e) for e in self.events), default=None)
+        span = [] if self.first is None else [self.first + dt.timedelta(days=i)
+                                              for i in range((c.today - self.first).days + 1)]
+        self.daily = daily_aggregates(self.events, span)
+        self.items = checklist_items(self.settings)
+        plan = _dict(self.settings.get("training")).get("sessions_per_week")
+        self.plan = plan if is_int(plan) and plan > 0 else None
+        band = protein_target(self.settings, self.events)[0]  # uses weight internally; never returned
+        self.protein_mid = (band[0] + band[1]) / 2.0 if band and band[1] else band[0] if band else None
+
+    def complete(self, d):
+        r = self.daily.get(d)
+        return bool(r and self.items) and all(len(r["_events"][typ]) >= need for _, typ, need in self.items)
+
+    def logged(self, d):
+        r = self.daily.get(d)
+        return bool(r) and any(r["_events"].values())
+
+    def metrics(self, days, week=False):
+        """{metric id: (value, n)} for the given days (only days since the member's first log count).
+        week=True: training against the full weekly plan (progress so far) instead of pro rata."""
+        days = [d for d in days if d in self.daily]
+        out = {}
+        if not days:
+            return out
+        n, rows = len(days), [self.daily[d] for d in days]
+        # consistency
+        comp = [self.complete(d) for d in days]
+        out["complete_days_pct"] = (sum(comp) / n * 100, n)
+        end = days[-1]
+        if end == self.today and not comp[-1]:  # today is still in progress
+            end -= dt.timedelta(days=1)
+        cur = 0
+        while self.complete(end):
+            cur += 1
+            end -= dt.timedelta(days=1)
+        longest = run = 0
+        for ok in comp:
+            run = run + 1 if ok else 0
+            longest = max(longest, run)
+        out["streak_current"], out["streak_longest"] = (cur, n), (longest, n)
+        # training
+        sessions = sum(r["training_n"] for r in rows)
+        weeks = 1.0 if week else max(n, 7) / 7.0
+        if self.plan:
+            out["plan_pct"] = (sessions / (self.plan * (1.0 if week else n / 7.0)) * 100, sessions)
+        out["active_min"] = (sum(r["training_min"] for r in rows) / weeks, sessions)
+        lifts = collections.defaultdict(dict)  # lift -> day -> best e1RM
+        for d, r in zip(days, rows):
+            for e in r["_events"]["training"]:
+                for s in _list(e.get("sets")):
+                    if not isinstance(s, dict) or not s.get("ex"):
+                        continue
+                    reps = [x for x in _list(s.get("reps")) if is_int(x) and x > 0]
+                    e1 = _epley(s.get("kg"), max(reps) if reps else None)
+                    k = norm_name(str(s["ex"]))
+                    if e1 and (d not in lifts[k] or e1 > lifts[k][d]):
+                        lifts[k][d] = e1
+        changes = [(v[max(v)] - v[min(v)]) / v[min(v)] * 100 for v in lifts.values() if len(v) >= 2]
+        if changes:
+            out["strength_pct"] = (statistics.mean(changes), len(changes))
+        # sleep
+        hrs = [r["sleep_h"] for r in rows if r["sleep_h"] is not None]
+        if hrs:
+            out["sleep_h"] = (statistics.mean(hrs), len(hrs))
+            out["nights_7h_pct"] = (sum(1 for h in hrs if h >= 7) / len(hrs) * 100, len(hrs))
+        beds = []
+        for d, r in zip(days, rows):
+            main = main_sleep(r["_events"]["sleep"])
+            if main:
+                beds.append((main[0] - dt.datetime.combine(d - dt.timedelta(days=1), dt.time(20, 0))).total_seconds() / 60)
+        if len(beds) >= 3:
+            out["bedtime_sd_min"] = (statistics.pstdev(beds), len(beds))
+        q = [r["sleep_quality"] for r in rows if r["sleep_quality"] is not None]
+        if q:
+            out["sleep_quality"] = (statistics.mean(q), len(q))
+        # hydration, protein, wellbeing
+        water = [r["water_ml"] / 1000.0 for r in rows if r["water_ml"] > 0]
+        if water:
+            out["water_l"] = (statistics.mean(water), len(water))
+        prot = [r["protein_g"] for r in rows if r["meals"] and r["protein_g"] is not None]
+        if prot and self.protein_mid:
+            out["protein_pct"] = (statistics.mean(prot) / self.protein_mid * 100, len(prot))
+        for k in ("energy", "mood", "stress"):
+            vals = [r[k] for r in rows if r[k] is not None]
+            if vals:
+                out[k] = (statistics.mean(vals), len(vals))
+        # substances (tobacco): free days and change against the member's own baseline phase
+        logged = [d for d in days if self.logged(d)]
+        if logged:
+            out["tobacco_free_days"] = (sum(1 for d in logged if self.daily[d]["tobacco_n"] == 0), len(logged))
+        phases = settings_phases(self.settings)
+        base = next((p for p in phases if p["id"] == "baseline"), phases[0] if phases else None)
+        if base and base["to"] and base["to"] < self.today:
+            bdays = [d for d in self.daily if base["from"] <= d <= base["to"] and self.logged(d)]
+            now = [d for d in logged if d > base["to"]]
+            b_rate = sum(self.daily[d]["tobacco_n"] for d in bdays) / len(bdays) if bdays else 0
+            if b_rate > 0 and now:
+                rate = sum(self.daily[d]["tobacco_n"] for d in now) / len(now)
+                out["tobacco_vs_baseline_pct"] = ((rate - b_rate) / b_rate * 100, len(now))
+        return out
+
+
+def _compare_round(v, nd):
+    return int(round(v)) if nd == 0 else round(v, nd)
+
+
+def _compare_leader(values, direction, nd, cap):
+    """Member id with the unique best value (rounded as shown; capped at the plan), else None (tie / < 2)."""
+    if len(values) < 2:
+        return None
+    score = {}
+    for mid, x in values.items():
+        v = round(x["value"], nd)
+        if cap is not None:
+            v = min(v, cap) if direction == "higher" else max(v, cap)
+        score[mid] = v
+    best = (max if direction == "higher" else min)(score.values())
+    top = [mid for mid, v in score.items() if v == best]
+    return top[0] if len(top) == 1 else None
+
+
+def _compare_groups(per_member, sharers):
+    """per_member: {member id: {metric id: (value, n)}}; sharers: {group: [member ids]}."""
+    groups = []
+    for g in COMPARE_GROUPS:
+        if not sharers.get(g):
+            continue
+        metrics = []
+        for mid_, grp, direction, unit, nd, n_of, cap in COMPARE_METRICS:
+            if grp != g:
+                continue
+            values = {}
+            for pid in sharers[g]:
+                got = per_member.get(pid, {}).get(mid_)
+                if got is None:
+                    continue
+                v, n = got
+                x = {"value": _compare_round(v, nd), "n": n}
+                if unit == "%" and cap is not None and v > COMPARE_DISPLAY_CAP:
+                    x = {"value": COMPARE_DISPLAY_CAP, "n": n, "capped": True}
+                values[pid] = x
+            metrics.append({"id": mid_, "label_key": "cmp_" + mid_, "direction": direction, "unit": unit,
+                            "decimals": nd, "n_of": n_of, "rank_cap": cap, "values": values,
+                            "leader": _compare_leader(values, direction, nd, cap)})
+        groups.append({"id": g, "members": list(sharers[g]), "headline": metrics[0]["id"], "metrics": metrics})
+    return groups
+
+
+def compare_data(ctx, days="30"):
+    """Household comparison (GET /api/compare). Only members with consent who share a group appear in
+    it; values are habits and progress relative to each member's own plan - never weight, kcal, body
+    measures, blood pressure or labs. Returns None outside household mode."""
+    key = str(days)
+    if key not in DASHBOARD_PERIODS:
+        raise BosError("days must be one of %s" % "/".join(DASHBOARD_PERIODS))
+    if not ctx.household:
+        return None
+    to = ctx.today
+    compared, excluded, data, shares = [], [], {}, {}
+    for m in ctx.household["members"]:
+        pub = {"id": m["id"], "name": m["name"], "color": m["color"], "initials": initials(m["name"])}
+        if not m["consent"]:
+            excluded.append(dict(pub, reason="no_consent"))
+            continue
+        c = ctx.for_profile(m["id"])
+        share = compare_share(c.settings if isinstance(c.settings, dict) else {})
+        if not share:
+            excluded.append(dict(pub, reason="not_shared"))
+            continue
+        compared.append(pub)
+        data[m["id"]], shares[m["id"]] = _CompareMember(c), share
+    ids = [p["id"] for p in compared]
+    if key == "all":
+        firsts = [data[i].first for i in ids if data[i].first]
+        frm = min(firsts) if firsts else to - dt.timedelta(days=13)
+    else:
+        frm = to - dt.timedelta(days=int(key) - 1)
+    period_days = [frm + dt.timedelta(days=i) for i in range((to - frm).days + 1)]
+    monday = to - dt.timedelta(days=to.weekday())
+    week_days = [monday + dt.timedelta(days=i) for i in range(to.weekday() + 1)]
+
+    notes, sharers = [], {}
+    for g in COMPARE_GROUPS:
+        s = [i for i in ids if g in shares[i]]
+        if g in COMPARE_ALL_MUST_SHARE and len(s) < len(ids):
+            if s:
+                notes.append({"key": "all_must_share", "group": g})
+            s = []
+        sharers[g] = s
+    for i in ids:
+        if data[i].plan is None and i in sharers["training"]:
+            notes.append({"key": "no_training_plan", "member": i})
+        if data[i].protein_mid is None and i in sharers["protein"]:
+            notes.append({"key": "no_protein_target", "member": i})
+
+    weeks = []
+    firsts = [data[i].first for i in ids if data[i].first]
+    for d in (d for d in period_days if firsts and d >= min(firsts)):  # no empty weeks before anyone logged
+        if not weeks or d.weekday() == 0:
+            weeks.append([])
+        weeks[-1].append(d)
+    trends = {"weeks": [{"from": w[0].isoformat(), "to": w[-1].isoformat(), "kw": w[0].isocalendar()[1]} for w in weeks],
+              "metrics": []}
+    for mid_, g in COMPARE_TRENDS:
+        if not sharers[g]:
+            continue
+        spec = next(x for x in COMPARE_METRICS if x[0] == mid_)
+        vals = {}
+        for i in sharers[g]:
+            series = [data[i].metrics(w).get(mid_) for w in weeks]
+            vals[i] = [_compare_round(min(v[0], COMPARE_DISPLAY_CAP) if spec[3] == "%" else v[0], spec[4]) if v else None
+                       for v in series]
+        trends["metrics"].append({"id": mid_, "group": g, "label_key": "cmp_" + mid_, "direction": spec[2],
+                                  "unit": spec[3], "decimals": spec[4], "values": vals})
+
+    return {
+        "schema": 1, "today": to.isoformat(), "generated_at": ctx.now().isoformat(timespec="seconds"),
+        "language": ctx.settings.get("language") or "en",
+        "household": {"name": ctx.household.get("name")},
+        "period": {"key": key, "from": frm.isoformat(), "to": to.isoformat(), "days": len(period_days)},
+        "members": compared, "excluded": excluded,
+        "groups": _compare_groups({i: data[i].metrics(period_days) for i in ids}, sharers),
+        "week": {"from": monday.isoformat(), "to": to.isoformat(), "kw": to.isocalendar()[1],
+                 "groups": _compare_groups({i: data[i].metrics(week_days, week=True) for i in ids}, sharers)},
+        "trends": trends, "notes": notes,
+    }
+
+
 KEY_COOKIE = "bos_key"
 KEY_COOKIE_MAX_AGE = 400 * 86400
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
@@ -2605,7 +2899,8 @@ def device_links(key, port):
 def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="127.0.0.1", is_local=None):
     """Read-only HTTP server for tools/dashboard/ and its JSON API.
 
-    GET /api/profiles, /api/data?profile=ID&days=N, /api/review?profile=ID&file=YYYY-Www.md|YYYY-MM.md.
+    GET /api/profiles, /api/data?profile=ID&days=N, /api/review?profile=ID&file=YYYY-Www.md|YYYY-MM.md,
+    /api/compare?days=N (household mode; 404 otherwise).
     Data is rebuilt from the instance/household folders on every request.
 
     Access: loopback clients need no key. Any other client needs the household key (server.json),
@@ -2715,6 +3010,17 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
                                         "members": [{k: m[k] for k in ("id", "name", "color", "consent", "initials")}
                                                     for m in c.members()],
                                         "default": c.profile_id, "language": c.settings.get("language") or "en"})
+            if parts.path == "/api/compare":
+                days = qs.get("days", [default_days])[0]
+                if days not in DASHBOARD_PERIODS:
+                    return self._json(400, {"error": "days must be one of %s" % "/".join(DASHBOARD_PERIODS)})
+                try:
+                    out = compare_data(fresh(), days)
+                except Exception as e:  # report, never crash the server
+                    return self._json(500, {"error": "%s: %s" % (type(e).__name__, e)})
+                if out is None:
+                    return self._json(404, {"error": "the comparison needs household mode"})
+                return self._json(200, out)
             if parts.path in ("/api/data", "/api/review"):
                 profile = qs.get("profile", [None])[0]
                 try:

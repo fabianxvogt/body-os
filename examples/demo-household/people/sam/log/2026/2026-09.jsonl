@@ -1,0 +1,11 @@
+{"id": "sleep-20260930065000-5a01", "ts": "2026-09-30T06:50:00+02:00", "type": "sleep", "bed": "2026-09-29T23:00:00+02:00", "wake": "2026-09-30T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20260930072000-5a02", "ts": "2026-09-30T07:20:00+02:00", "type": "weight", "kg": 58.4, "src": "device"}
+{"id": "meal-20260930074500-5a03", "ts": "2026-09-30T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "porridge with peanut butter and banana", "kcal": 610, "protein_g": 24, "src": "chat"}
+{"id": "drink-20260930080000-5a04", "ts": "2026-09-30T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20260930103000-5a05", "ts": "2026-09-30T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20260930124000-5a06", "ts": "2026-09-30T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "lentil curry with rice", "kcal": 760, "protein_g": 30, "src": "estimate", "conf": "med"}
+{"id": "drink-20260930150000-5a07", "ts": "2026-09-30T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20260930161500-5a08", "ts": "2026-09-30T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "milk shake with oats", "kcal": 420, "protein_g": 20, "src": "chat"}
+{"id": "meal-20260930191500-5a09", "ts": "2026-09-30T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "salmon, potatoes and green beans", "kcal": 820, "protein_g": 42, "src": "chat"}
+{"id": "drink-20260930200000-5a0a", "ts": "2026-09-30T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "checkin-20260930213000-5a0b", "ts": "2026-09-30T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 3, "stress": 3, "src": "chat"}

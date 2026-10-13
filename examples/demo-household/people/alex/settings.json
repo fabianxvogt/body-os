@@ -34,5 +34,6 @@
   "training": {"sessions_per_week": 4, "schedule": {"mon": "strength", "tue": "endurance", "thu": "strength", "sat|sun": "endurance"}},
   "measurements": {"waist_cm": "weekly:tue", "circumferences": "monthly:first-sun", "bp": "2x-week"},
   "checklist": ["weight", "sleep", "meals>=2", "checkin"],
+  "compare": {"share": ["consistency", "training", "sleep", "hydration", "protein", "wellbeing", "substances"]},
   "costs": {"currency": "EUR", "tobacco_eur_per_g": 0.35, "tobacco_g_per_use": 0.8, "cannabis_eur_per_g": 10.0, "cannabis_g_per_use": 0.3, "alcohol_eur_per_unit": 1.5, "coffee_eur_per_cup_home": 0.25}
 }

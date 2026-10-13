@@ -7,8 +7,9 @@
 demo-household/
 ├── household/          household.json (members), shared settings, pantry/, recipes/
 └── people/
-    ├── alex/           consent: true  — the demo-me log, plans and reviews
-    └── sam/            consent: false — not onboarded yet, nothing is logged
+    ├── alex/           consent: true  — the demo-me log, plans and reviews; shares all compare groups
+    ├── sam/            consent: true  — gaining weight, 3 sessions/week; shares everything but substances
+    └── robin/          consent: false — not onboarded yet, nothing is logged (excluded from Compare)
 ```
 
 Member paths in `household.json` are relative to the folder that contains `household/`.

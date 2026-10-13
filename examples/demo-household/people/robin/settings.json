@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "language": "en",
+  "timezone": "Europe/Berlin",
+  "units": "metric",
+  "effort": "5min",
+  "modules": [],
+  "plans": [],
+  "privacy": {
+    "storage": "local",
+    "agent_reads": "summaries-preferred",
+    "store_photos": false
+  },
+  "checkin": {
+    "channels": [
+      "desktop"
+    ]
+  },
+  "devices": {
+    "phone": null,
+    "bathroom_scale": false,
+    "kitchen_scale": false,
+    "tape": false,
+    "bp_monitor": false,
+    "wearable": null,
+    "sync": "none"
+  },
+  "nutrition": {
+    "show_numbers": true,
+    "sources": [
+      "bls",
+      "off"
+    ],
+    "targets": {}
+  },
+  "household": {
+    "members": 1,
+    "portions_default": 1,
+    "shared_notes": []
+  },
+  "kitchen": {
+    "devices": [
+      "stove",
+      "oven"
+    ],
+    "platforms": []
+  },
+  "pantry": {
+    "mode": "auto",
+    "store_prices": true
+  },
+  "cooking": {
+    "options": 4,
+    "max_minutes_weekday": 30
+  },
+  "reviews": {
+    "weekly": "sunday-evening",
+    "monthly": "first-sunday",
+    "reminders": "user-phone"
+  },
+  "substances": {
+    "shorthand": {
+      "J": "joint",
+      "Z": "cigarette",
+      "V": "cannabis_vape"
+    },
+    "plan_b": null
+  },
+  "phases": [],
+  "decisions": [],
+  "goals": {
+    "weight_rate_kg_month": null,
+    "protein_g_per_kg": null
+  },
+  "training": {
+    "sessions_per_week": null,
+    "schedule": {}
+  },
+  "measurements": {},
+  "checklist": [
+    "weight",
+    "sleep",
+    "meals>=2",
+    "checkin"
+  ],
+  "costs": {
+    "currency": "EUR",
+    "tobacco_eur_per_g": null,
+    "tobacco_g_per_use": null,
+    "cannabis_eur_per_g": null,
+    "cannabis_g_per_use": null,
+    "alcohol_eur_per_unit": null,
+    "coffee_eur_per_cup_home": null
+  },
+  "synthetic": true
+}

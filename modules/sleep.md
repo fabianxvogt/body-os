@@ -4,7 +4,9 @@
 stages (estimates). Knowledge: [../knowledge/sleep.md](../knowledge/sleep.md).
 
 **Check-in handling**
-- "Bett 0:30, auf 7:45, schlecht geschlafen, 3× wach" → one `sleep` event dated to the wake-up day.
+- "Bett 0:30, auf 7:45, schlecht geschlafen, 3× wach" → one `sleep` event with `ts` = wake-up time.
+- Only the bedtime in the evening ("Bett 23:30") → `note` with `tags: ["bed"]`; next morning combine it
+  with the wake time into the `sleep` event.
 - If a device record exists for the same night, keep both; the device values go in `dur_min`/stage
   fields, subjective values stay.
 

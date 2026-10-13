@@ -499,6 +499,33 @@ body.choosing { overflow: hidden; }
 .onboard { display: flex; align-items: center; gap: 16px; }
 .onboard p { margin: 0; color: var(--text-2); font-size: 15px; max-width: 62ch; }
 
+/* ---------- compare (household) ---------- */
+
+.cmp-loading { margin: 18px 4px; }
+.cmp-people { display: flex; flex-wrap: wrap; gap: 14px 26px; margin-top: 14px; }
+.cmp-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cmp-person-text { min-width: 0; }
+.cmp-person-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.cmp-person-val { font: 650 24px/1.15 var(--font-display); letter-spacing: -0.02em; white-space: nowrap; }
+.cmp-person-meta { color: var(--muted); font-size: 12px; }
+.cmp-lead {
+  display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-size: 11.5px; font-weight: 650;
+  padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text);
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+}
+.cmp-lead i { font-style: normal; font-size: 11px; line-height: 1; }
+.cmp-copy { margin: 14px 0 0; font-size: 14px; color: var(--text); }
+.cmp-rows li { flex-wrap: wrap; align-items: flex-start; gap: 6px 14px; }
+.cmp-metric { flex: 1 1 170px; min-width: 0; font-size: 13.5px; padding-top: 2px; }
+.cmp-metric small { display: block; color: var(--muted); font-size: 11.5px; }
+.cmp-vals { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin-left: auto; }
+.cmp-val { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cmp-val b { font-weight: 620; }
+.cmp-val small { color: var(--muted); font-size: 11.5px; }
+.cmp-foot { margin: 26px 4px 0; color: var(--text-2); font-size: 12.5px; }
+.cmp-foot p { margin: 3px 0; }
+.cmp-foot .cmp-foot-main { color: var(--text); font-size: 13.5px; font-weight: 600; }
+
 /* ---------- /devices (loopback-only) ---------- */
 
 .wrap.devices { padding-top: calc(36px + env(safe-area-inset-top)); max-width: 880px; }

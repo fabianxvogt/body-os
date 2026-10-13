@@ -1,96 +1,25 @@
 {
   "schema": 1,
+  "synthetic": true,
   "language": "en",
   "timezone": "Europe/Berlin",
   "units": "metric",
   "effort": "5min",
-  "modules": [],
+  "modules": ["core", "sleep", "nutrition", "training", "reviews"],
   "plans": [],
-  "privacy": {
-    "storage": "local",
-    "agent_reads": "summaries-preferred",
-    "store_photos": false
-  },
-  "checkin": {
-    "channels": [
-      "desktop"
-    ]
-  },
-  "devices": {
-    "phone": null,
-    "bathroom_scale": false,
-    "kitchen_scale": false,
-    "tape": false,
-    "bp_monitor": false,
-    "wearable": null,
-    "sync": "none"
-  },
-  "nutrition": {
-    "show_numbers": true,
-    "sources": [
-      "bls",
-      "off"
-    ],
-    "targets": {}
-  },
-  "household": {
-    "members": 1,
-    "portions_default": 1,
-    "shared_notes": []
-  },
-  "kitchen": {
-    "devices": [
-      "stove",
-      "oven"
-    ],
-    "platforms": []
-  },
-  "pantry": {
-    "mode": "auto",
-    "store_prices": true
-  },
-  "cooking": {
-    "options": 4,
-    "max_minutes_weekday": 30
-  },
-  "reviews": {
-    "weekly": "sunday-evening",
-    "monthly": "first-sunday",
-    "reminders": "user-phone"
-  },
-  "substances": {
-    "shorthand": {
-      "J": "joint",
-      "Z": "cigarette",
-      "V": "cannabis_vape"
-    },
-    "plan_b": null
-  },
-  "phases": [],
-  "decisions": [],
-  "goals": {
-    "weight_rate_kg_month": null,
-    "protein_g_per_kg": null
-  },
-  "training": {
-    "sessions_per_week": null,
-    "schedule": {}
-  },
-  "measurements": {},
-  "checklist": [
-    "weight",
-    "sleep",
-    "meals>=2",
-    "checkin"
+  "privacy": {"storage": "local", "agent_reads": "summaries-preferred", "store_photos": false},
+  "checkin": {"channels": ["phone"]},
+  "devices": {"phone": "ios", "bathroom_scale": true, "kitchen_scale": false, "tape": false, "bp_monitor": false, "wearable": "running-watch", "sync": "manual-export"},
+  "nutrition": {"show_numbers": true, "sources": ["bls"], "targets": {}},
+  "reviews": {"weekly": "sunday-evening", "monthly": "first-sunday", "reminders": "user-phone"},
+  "phases": [
+    {"id": "build", "name": "Build phase", "from": "2026-09-30", "to": "2026-12-22", "focus": "Three sessions a week, three real meals a day"}
   ],
-  "costs": {
-    "currency": "EUR",
-    "tobacco_eur_per_g": null,
-    "tobacco_g_per_use": null,
-    "cannabis_eur_per_g": null,
-    "cannabis_g_per_use": null,
-    "alcohol_eur_per_unit": null,
-    "coffee_eur_per_cup_home": null
-  },
-  "synthetic": true
+  "decisions": [],
+  "goals": {"weight_rate_kg_month": [0.25, 0.75], "protein_g_per_kg": [1.6, 2.0]},
+  "training": {"sessions_per_week": 3, "schedule": {"mon": "strength", "thu": "strength", "sat": "run"}},
+  "measurements": {},
+  "checklist": ["weight", "sleep", "meals>=2", "checkin"],
+  "compare": {"share": ["consistency", "training", "sleep", "hydration", "protein", "wellbeing"]},
+  "costs": {"currency": "EUR"}
 }

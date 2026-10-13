@@ -4,7 +4,9 @@
 notable events (illness, travel, party) as `note` with tags.
 
 **Check-in handling**
-- "70.4" or "Gewicht 70,4" in the morning → `weight`.
+- "70.4", "G 70,4" or "Gewicht 70,4" in the morning → `weight`. An evening weigh-in gets a `note`
+  ("evening") so it doesn't skew the morning series.
+- "Schritte 8500" (from the iPhone Health app, evening) → `measure` `metric: steps`.
 - "Energie 3, Laune 4, Stress 2" or "ok day, a bit stressed" → `checkin` (map words to numbers,
   `conf: "med"` when inferred).
 - Illness or travel → `note` with tags (`sick`, `travel`, `party`) — reviews exclude or flag these days.

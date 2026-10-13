@@ -43,6 +43,9 @@ claude            # or: codex, gemini, cursor …  → "Set me up"
 - **Dashboard on the phone.** `bos dashboard --lan` serves the dashboard in your home network. On the
   Mac open `http://127.0.0.1:8030/devices`, scan the QR code with the phone, then Share → "Add to
   Home Screen" for an app-like view. Everyone picks their avatar ("Who are you?").
+- **Friendly competition.** In household mode a Compare tab sets members side by side on habits and
+  progress against each person's own plan (consistency, training, sleep, water, protein) — only what
+  each person shares (`compare.share`), never weight or body measurements.
 - **Always on (macOS).** `bos service install --lan` runs it in the background (launchd);
   `bos service status` / `uninstall`.
 
@@ -61,7 +64,7 @@ reviews — see [modules/](modules/README.md).
 
 `tools/bos.py` (Python 3.9+, stdlib only): `init`, `doctor`, `log`, `pantry-log`, `validate`,
 `summary`, `pantry`, `build`, `dash` (Datasette raw tables), `household`, `profile`, `service`,
-`dashboard` (eight tabs — Today, Body,
+`dashboard` (eight tabs, plus Compare in household mode — Today, Body,
 Nutrition, Kitchen, Sleep & energy, Substances, Training, Journal — with plan phases, due items,
 goal corridors, costs and reviews; profile switcher; served read-only on 127.0.0.1, or in the LAN
 with a household key; live from the private folders; no external requests; home-screen ready), `foods-import`, `food search|calc`. Tests:

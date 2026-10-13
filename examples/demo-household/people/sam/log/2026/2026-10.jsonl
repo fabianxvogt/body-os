@@ -1,0 +1,124 @@
+{"id": "sleep-20261001070500-5a0c", "ts": "2026-10-01T07:05:00+02:00", "type": "sleep", "bed": "2026-09-30T22:45:00+02:00", "wake": "2026-10-01T07:05:00+02:00", "quality": 3, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261001072000-5a0d", "ts": "2026-10-01T07:20:00+02:00", "type": "weight", "kg": 58.4, "src": "device"}
+{"id": "meal-20261001074500-5a0e", "ts": "2026-10-01T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "scrambled eggs on toast", "kcal": 540, "protein_g": 28, "src": "chat"}
+{"id": "drink-20261001080000-5a0f", "ts": "2026-10-01T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261001103000-5a10", "ts": "2026-10-01T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "meal-20261001124000-5a11", "ts": "2026-10-01T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "chicken wrap with hummus", "kcal": 690, "protein_g": 36, "src": "estimate", "conf": "med"}
+{"id": "drink-20261001150000-5a12", "ts": "2026-10-01T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "training-20261001180000-5a13", "ts": "2026-10-01T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "B", "dur_min": 55, "rpe": 7, "sets": [{"ex": "squat", "kg": 40.0, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 27.5, "reps": [8, 8, 8]}, {"ex": "row", "kg": 30.0, "reps": [10, 10, 10]}], "src": "chat"}
+{"id": "meal-20261001191500-5a14", "ts": "2026-10-01T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "tofu stir-fry with noodles", "kcal": 780, "protein_g": 30, "src": "chat"}
+{"id": "checkin-20261001213000-5a15", "ts": "2026-10-01T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 5, "stress": 2, "src": "chat"}
+{"id": "sleep-20261002064500-5a16", "ts": "2026-10-02T06:45:00+02:00", "type": "sleep", "bed": "2026-10-01T23:10:00+02:00", "wake": "2026-10-02T06:45:00+02:00", "quality": 3, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261002072000-5a17", "ts": "2026-10-02T07:20:00+02:00", "type": "weight", "kg": 58.4, "src": "device"}
+{"id": "meal-20261002074500-5a18", "ts": "2026-10-02T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "yoghurt with granola and nuts", "kcal": 580, "protein_g": 22, "src": "chat"}
+{"id": "drink-20261002080000-5a19", "ts": "2026-10-02T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261002103000-5a1a", "ts": "2026-10-02T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "meal-20261002124000-5a1b", "ts": "2026-10-02T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "pasta with tuna", "kcal": 740, "protein_g": 34, "src": "estimate", "conf": "med"}
+{"id": "drink-20261002150000-5a1c", "ts": "2026-10-02T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "meal-20261002161500-5a1d", "ts": "2026-10-02T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "cheese sandwich", "kcal": 380, "protein_g": 18, "src": "chat"}
+{"id": "meal-20261002191500-5a1e", "ts": "2026-10-02T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "chili con carne with rice", "kcal": 860, "protein_g": 38, "src": "chat"}
+{"id": "checkin-20261002213000-5a1f", "ts": "2026-10-02T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "sleep-20261003071500-5a20", "ts": "2026-10-03T07:15:00+02:00", "type": "sleep", "bed": "2026-10-02T22:55:00+02:00", "wake": "2026-10-03T07:15:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261003072000-5a21", "ts": "2026-10-03T07:20:00+02:00", "type": "weight", "kg": 58.5, "src": "device"}
+{"id": "meal-20261003074500-5a22", "ts": "2026-10-03T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "porridge with peanut butter and banana", "kcal": 610, "protein_g": 24, "src": "chat"}
+{"id": "drink-20261003080000-5a23", "ts": "2026-10-03T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "training-20261003100000-5a27", "ts": "2026-10-03T10:00:00+02:00", "type": "training", "kind": "run", "dur_min": 32, "distance_km": 5.1, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "drink-20261003103000-5a24", "ts": "2026-10-03T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261003124000-5a25", "ts": "2026-10-03T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "lentil curry with rice", "kcal": 760, "protein_g": 30, "src": "estimate", "conf": "med"}
+{"id": "drink-20261003150000-5a26", "ts": "2026-10-03T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 600, "src": "chat"}
+{"id": "meal-20261003191500-5a28", "ts": "2026-10-03T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "salmon, potatoes and green beans", "kcal": 820, "protein_g": 42, "src": "chat"}
+{"id": "drink-20261003200000-5a29", "ts": "2026-10-03T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "checkin-20261003213000-5a2a", "ts": "2026-10-03T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "sleep-20261004061000-5a2b", "ts": "2026-10-04T06:10:00+02:00", "type": "sleep", "bed": "2026-10-03T22:50:00+02:00", "wake": "2026-10-04T06:10:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "sleep-20261005071500-5a2c", "ts": "2026-10-05T07:15:00+02:00", "type": "sleep", "bed": "2026-10-04T22:55:00+02:00", "wake": "2026-10-05T07:15:00+02:00", "quality": 4, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261005072000-5a2d", "ts": "2026-10-05T07:20:00+02:00", "type": "weight", "kg": 58.7, "src": "device"}
+{"id": "meal-20261005074500-5a2e", "ts": "2026-10-05T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "yoghurt with granola and nuts", "kcal": 580, "protein_g": 22, "src": "chat"}
+{"id": "drink-20261005080000-5a2f", "ts": "2026-10-05T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261005103000-5a30", "ts": "2026-10-05T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "meal-20261005124000-5a31", "ts": "2026-10-05T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "pasta with tuna", "kcal": 740, "protein_g": 34, "src": "estimate", "conf": "med"}
+{"id": "drink-20261005150000-5a32", "ts": "2026-10-05T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "training-20261005180000-5a33", "ts": "2026-10-05T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "A", "dur_min": 55, "rpe": 7, "sets": [{"ex": "squat", "kg": 41.25, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 28.125, "reps": [8, 8, 8]}, {"ex": "row", "kg": 30.625, "reps": [10, 10, 10]}], "src": "chat"}
+{"id": "meal-20261005191500-5a34", "ts": "2026-10-05T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "chili con carne with rice", "kcal": 860, "protein_g": 38, "src": "chat"}
+{"id": "checkin-20261005213000-5a35", "ts": "2026-10-05T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 3, "stress": 2, "src": "chat"}
+{"id": "sleep-20261006065000-5a36", "ts": "2026-10-06T06:50:00+02:00", "type": "sleep", "bed": "2026-10-05T23:00:00+02:00", "wake": "2026-10-06T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261006072000-5a37", "ts": "2026-10-06T07:20:00+02:00", "type": "weight", "kg": 58.6, "src": "device"}
+{"id": "meal-20261006074500-5a38", "ts": "2026-10-06T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "porridge with peanut butter and banana", "kcal": 610, "protein_g": 24, "src": "chat"}
+{"id": "drink-20261006080000-5a39", "ts": "2026-10-06T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261006103000-5a3a", "ts": "2026-10-06T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261006124000-5a3b", "ts": "2026-10-06T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "lentil curry with rice", "kcal": 760, "protein_g": 30, "src": "estimate", "conf": "med"}
+{"id": "drink-20261006150000-5a3c", "ts": "2026-10-06T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261006161500-5a3d", "ts": "2026-10-06T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "cheese sandwich", "kcal": 380, "protein_g": 18, "src": "chat"}
+{"id": "meal-20261006191500-5a3e", "ts": "2026-10-06T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "salmon, potatoes and green beans", "kcal": 820, "protein_g": 42, "src": "chat"}
+{"id": "checkin-20261006213000-5a3f", "ts": "2026-10-06T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "sleep-20261007060500-5a40", "ts": "2026-10-07T06:05:00+02:00", "type": "sleep", "bed": "2026-10-06T22:45:00+02:00", "wake": "2026-10-07T06:05:00+02:00", "quality": 5, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261007072000-5a41", "ts": "2026-10-07T07:20:00+02:00", "type": "weight", "kg": 58.7, "src": "device"}
+{"id": "meal-20261007074500-5a42", "ts": "2026-10-07T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "scrambled eggs on toast", "kcal": 540, "protein_g": 28, "src": "chat"}
+{"id": "drink-20261007080000-5a43", "ts": "2026-10-07T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261007103000-5a44", "ts": "2026-10-07T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "meal-20261007124000-5a45", "ts": "2026-10-07T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "chicken wrap with hummus", "kcal": 690, "protein_g": 36, "src": "estimate", "conf": "med"}
+{"id": "drink-20261007150000-5a46", "ts": "2026-10-07T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261007191500-5a47", "ts": "2026-10-07T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "tofu stir-fry with noodles", "kcal": 780, "protein_g": 30, "src": "chat"}
+{"id": "drink-20261007200000-5a48", "ts": "2026-10-07T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "sleep-20261008072000-5a49", "ts": "2026-10-08T07:20:00+02:00", "type": "sleep", "bed": "2026-10-07T23:00:00+02:00", "wake": "2026-10-08T07:20:00+02:00", "quality": 5, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261008072000-5a4a", "ts": "2026-10-08T07:20:00+02:00", "type": "weight", "kg": 58.7, "src": "device"}
+{"id": "meal-20261008074500-5a4b", "ts": "2026-10-08T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "yoghurt with granola and nuts", "kcal": 580, "protein_g": 22, "src": "chat"}
+{"id": "drink-20261008080000-5a4c", "ts": "2026-10-08T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261008103000-5a4d", "ts": "2026-10-08T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261008124000-5a4e", "ts": "2026-10-08T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "pasta with tuna", "kcal": 740, "protein_g": 34, "src": "estimate", "conf": "med"}
+{"id": "drink-20261008150000-5a4f", "ts": "2026-10-08T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 600, "src": "chat"}
+{"id": "meal-20261008161500-5a50", "ts": "2026-10-08T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "milk shake with oats", "kcal": 420, "protein_g": 20, "src": "chat"}
+{"id": "training-20261008180000-5a51", "ts": "2026-10-08T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "B", "dur_min": 55, "rpe": 7, "sets": [{"ex": "squat", "kg": 42.5, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 28.75, "reps": [8, 8, 8]}, {"ex": "row", "kg": 31.25, "reps": [10, 10, 10]}], "src": "chat"}
+{"id": "meal-20261008191500-5a52", "ts": "2026-10-08T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "chili con carne with rice", "kcal": 860, "protein_g": 38, "src": "chat"}
+{"id": "checkin-20261008213000-5a53", "ts": "2026-10-08T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 3, "stress": 3, "src": "chat"}
+{"id": "sleep-20261009061000-5a54", "ts": "2026-10-09T06:10:00+02:00", "type": "sleep", "bed": "2026-10-08T23:00:00+02:00", "wake": "2026-10-09T06:10:00+02:00", "quality": 3, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261009072000-5a55", "ts": "2026-10-09T07:20:00+02:00", "type": "weight", "kg": 58.8, "src": "device"}
+{"id": "meal-20261009074500-5a56", "ts": "2026-10-09T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "porridge with peanut butter and banana", "kcal": 610, "protein_g": 24, "src": "chat"}
+{"id": "drink-20261009080000-5a57", "ts": "2026-10-09T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261009103000-5a58", "ts": "2026-10-09T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "meal-20261009124000-5a59", "ts": "2026-10-09T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "lentil curry with rice", "kcal": 760, "protein_g": 30, "src": "estimate", "conf": "med"}
+{"id": "drink-20261009150000-5a5a", "ts": "2026-10-09T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "meal-20261009191500-5a5b", "ts": "2026-10-09T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "salmon, potatoes and green beans", "kcal": 820, "protein_g": 42, "src": "chat"}
+{"id": "checkin-20261009213000-5a5c", "ts": "2026-10-09T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 5, "stress": 2, "src": "chat"}
+{"id": "sleep-20261010060500-5a5d", "ts": "2026-10-10T06:05:00+02:00", "type": "sleep", "bed": "2026-10-09T22:55:00+02:00", "wake": "2026-10-10T06:05:00+02:00", "quality": 4, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261010072000-5a5e", "ts": "2026-10-10T07:20:00+02:00", "type": "weight", "kg": 59.1, "src": "device"}
+{"id": "meal-20261010074500-5a5f", "ts": "2026-10-10T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "scrambled eggs on toast", "kcal": 540, "protein_g": 28, "src": "chat"}
+{"id": "drink-20261010080000-5a60", "ts": "2026-10-10T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "training-20261010100000-5a65", "ts": "2026-10-10T10:00:00+02:00", "type": "training", "kind": "run", "dur_min": 32, "distance_km": 5.1, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "drink-20261010103000-5a61", "ts": "2026-10-10T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "note-20261010110000-5a87", "ts": "2026-10-10T11:00:00+02:00", "type": "note", "text": "Fictional note: first 5 km run without a walking break.", "tags": ["training", "milestone"], "src": "chat"}
+{"id": "meal-20261010124000-5a62", "ts": "2026-10-10T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "chicken wrap with hummus", "kcal": 690, "protein_g": 36, "src": "estimate", "conf": "med"}
+{"id": "drink-20261010150000-5a63", "ts": "2026-10-10T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 600, "src": "chat"}
+{"id": "meal-20261010161500-5a64", "ts": "2026-10-10T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "cheese sandwich", "kcal": 380, "protein_g": 18, "src": "chat"}
+{"id": "meal-20261010191500-5a66", "ts": "2026-10-10T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "tofu stir-fry with noodles", "kcal": 780, "protein_g": 30, "src": "chat"}
+{"id": "drink-20261010200000-5a67", "ts": "2026-10-10T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "checkin-20261010213000-5a68", "ts": "2026-10-10T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "sleep-20261011062000-5a69", "ts": "2026-10-11T06:20:00+02:00", "type": "sleep", "bed": "2026-10-10T22:45:00+02:00", "wake": "2026-10-11T06:20:00+02:00", "quality": 4, "wakeups": 0, "src": "chat"}
+{"id": "meal-20261011074500-5a6a", "ts": "2026-10-11T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "yoghurt with granola and nuts", "kcal": 580, "protein_g": 22, "src": "chat"}
+{"id": "drink-20261011080000-5a6b", "ts": "2026-10-11T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261011103000-5a6c", "ts": "2026-10-11T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261011124000-5a6d", "ts": "2026-10-11T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "pasta with tuna", "kcal": 740, "protein_g": 34, "src": "estimate", "conf": "med"}
+{"id": "drink-20261011150000-5a6e", "ts": "2026-10-11T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "meal-20261011191500-5a6f", "ts": "2026-10-11T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "chili con carne with rice", "kcal": 860, "protein_g": 38, "src": "chat"}
+{"id": "checkin-20261011213000-5a70", "ts": "2026-10-11T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "sleep-20261012065000-5a71", "ts": "2026-10-12T06:50:00+02:00", "type": "sleep", "bed": "2026-10-11T22:50:00+02:00", "wake": "2026-10-12T06:50:00+02:00", "quality": 4, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261012072000-5a72", "ts": "2026-10-12T07:20:00+02:00", "type": "weight", "kg": 59.2, "src": "device"}
+{"id": "meal-20261012074500-5a73", "ts": "2026-10-12T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "porridge with peanut butter and banana", "kcal": 610, "protein_g": 24, "src": "chat"}
+{"id": "drink-20261012080000-5a74", "ts": "2026-10-12T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261012103000-5a75", "ts": "2026-10-12T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261012124000-5a76", "ts": "2026-10-12T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "lentil curry with rice", "kcal": 760, "protein_g": 30, "src": "estimate", "conf": "med"}
+{"id": "drink-20261012150000-5a77", "ts": "2026-10-12T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261012161500-5a78", "ts": "2026-10-12T16:15:00+02:00", "type": "meal", "slot": "snack", "desc": "milk shake with oats", "kcal": 420, "protein_g": 20, "src": "chat"}
+{"id": "training-20261012180000-5a79", "ts": "2026-10-12T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "A", "dur_min": 55, "rpe": 7, "sets": [{"ex": "squat", "kg": 45.0, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 30.0, "reps": [8, 8, 8]}, {"ex": "row", "kg": 32.5, "reps": [10, 10, 10]}], "src": "chat"}
+{"id": "meal-20261012191500-5a7a", "ts": "2026-10-12T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "salmon, potatoes and green beans", "kcal": 820, "protein_g": 42, "src": "chat"}
+{"id": "drink-20261012200000-5a7b", "ts": "2026-10-12T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "checkin-20261012213000-5a7c", "ts": "2026-10-12T21:30:00+02:00", "type": "checkin", "energy": 4, "mood": 3, "stress": 2, "src": "chat"}
+{"id": "sleep-20261013065000-5a7d", "ts": "2026-10-13T06:50:00+02:00", "type": "sleep", "bed": "2026-10-12T22:50:00+02:00", "wake": "2026-10-13T06:50:00+02:00", "quality": 3, "wakeups": 0, "src": "chat"}
+{"id": "weight-20261013072000-5a7e", "ts": "2026-10-13T07:20:00+02:00", "type": "weight", "kg": 59.3, "src": "device"}
+{"id": "meal-20261013074500-5a7f", "ts": "2026-10-13T07:45:00+02:00", "type": "meal", "slot": "breakfast", "desc": "scrambled eggs on toast", "kcal": 540, "protein_g": 28, "src": "chat"}
+{"id": "drink-20261013080000-5a80", "ts": "2026-10-13T08:00:00+02:00", "type": "drink", "kind": "tea", "ml": 300, "src": "chat"}
+{"id": "drink-20261013103000-5a81", "ts": "2026-10-13T10:30:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261013124000-5a82", "ts": "2026-10-13T12:40:00+02:00", "type": "meal", "slot": "lunch", "desc": "chicken wrap with hummus", "kcal": 690, "protein_g": 36, "src": "estimate", "conf": "med"}
+{"id": "drink-20261013150000-5a83", "ts": "2026-10-13T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 600, "src": "chat"}
+{"id": "meal-20261013191500-5a84", "ts": "2026-10-13T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "tofu stir-fry with noodles", "kcal": 780, "protein_g": 30, "src": "chat"}
+{"id": "drink-20261013200000-5a85", "ts": "2026-10-13T20:00:00+02:00", "type": "drink", "kind": "water", "ml": 400, "src": "chat"}
+{"id": "checkin-20261013213000-5a86", "ts": "2026-10-13T21:30:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
