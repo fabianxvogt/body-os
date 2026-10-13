@@ -1264,11 +1264,10 @@ class TestLanServer(TempHousehold):
         code, _, body = self.get("/api/data?profile=alex&days=14", cookie=good)
         self.assertEqual((code, json.loads(body)["profile"]["id"]), (200, "alex"))
         self.assertEqual(json.loads(self.get("/manifest.webmanifest", cookie=good)[2])["start_url"], "/?key=" + key)
-        for path in ("/devices", "/devices/", "/devices.html", "/devices%2Ehtml", "/api/devices", "/api/devices/"):
-            self.assertIn(self.get(path, cookie=good)[0], (403, 404), path)
-        self.assertEqual(self.get("/devices%2Ehtml", cookie=good)[0], 403)
-        for path in ("/Devices.html", "/devices.HTML", "/%2Fdevices.html"):
-            self.assertEqual(self.get(path, cookie=good)[0], 403, path)
+        # a device that holds the key may open the QR page to connect the next phone; without key: 401
+        for path in ("/devices", "/devices.html", "/api/devices"):
+            self.assertEqual(self.get(path, cookie=good)[0], 200, path)
+            self.assertEqual(self.get(path)[0], 401, path)
         for bad_neighbour in ("a=b c; " + good, 'x="; ' + good, good + "; y=z"):
             self.assertEqual(self.get("/", cookie=bad_neighbour)[0], 200, bad_neighbour)
         self.assertEqual(self.get("/", cookie="bos_key=" + key[:-1] + "x")[0], 401)

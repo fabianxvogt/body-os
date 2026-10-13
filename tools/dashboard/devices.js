@@ -1,5 +1,5 @@
-/* body-os /devices — loopback-only page: QR code + copyable device link for phones in the LAN.
- * Data: GET /api/devices (loopback-only). QR: vendor/qrcode.js (qrcode-generator 1.4.4, MIT). */
+/* body-os /devices — page for loopback clients and devices that already hold the key: QR code + copyable device link for phones in the LAN.
+ * Data: GET /api/devices (loopback or key). QR: vendor/qrcode.js (qrcode-generator 1.4.4, MIT). */
 (function () {
   "use strict";
   var TX = {

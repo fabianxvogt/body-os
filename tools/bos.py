@@ -2500,7 +2500,6 @@ def bp_category(sys_, dia):
 KEY_COOKIE = "bos_key"
 KEY_COOKIE_MAX_AGE = 400 * 86400
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
-LOCAL_ONLY_PATHS = ("/devices", "/devices.html", "/api/devices")
 UNAUTHORIZED_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">
 <title>body-os</title><style>body{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:30em;margin:12vh auto;
@@ -2611,7 +2610,7 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
 
     Access: loopback clients need no key. Any other client needs the household key (server.json),
     as cookie bos_key or once via GET /?key=... (sets the cookie, redirects to /). /devices (QR code
-    and device link) is loopback-only. Requests whose Host header is not a name of this machine are
+    and device link) needs loopback or the key, like everything else. Requests whose Host header is not a name of this machine are
     refused (DNS-rebinding guard). `is_local(ip)` decides what counts as loopback (injectable for
     tests; also settable as srv.is_local). Port 0 picks a free port (tests)."""
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2709,9 +2708,7 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
                 given = self._cookie_key()
                 if not (key and given and hmac.compare_digest(given.encode("utf-8"), key.encode("utf-8"))):
                     return self._unauthorized()
-                norm = "/" + "/".join(x for x in unquote(parts.path).lower().split("/") if x)
-                if norm in LOCAL_ONLY_PATHS:
-                    return self._send(403, "only on this computer", "text/plain; charset=utf-8")
+                # a device holding the key may show /devices (QR) to connect the next phone
             if parts.path == "/api/profiles":
                 c = fresh()
                 return self._json(200, {"household": ({"name": c.household.get("name")} if c.household else None),

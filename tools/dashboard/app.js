@@ -17,7 +17,7 @@
       theme_dark: "Switch to dark theme", theme_light: "Switch to light theme", tabs_label: "Sections",
       table: "Table", chart: "Chart", empty: "No data yet – arrives with your first check-in",
       empty_period: "Nothing in this period", load_error: "Could not load data",
-      who: "Who are you?", who_sub: "Choose your profile – this device remembers it.", switch_profile: "Switch profile",
+      who: "Who are you?", who_sub: "Choose your profile – this device remembers it.", switch_profile: "Switch profile", connect_phone: "Connect a phone (QR code)",
       profile_of: "Profile: {name}", household: "Household", home_network: "home network",
       not_set_up: "not set up yet", no_consent: "{name} hasn’t done the interview yet",
       no_consent_hint: "Start: in the agent, say “Set up my profile”. Nothing is tracked for {name} until they agree – the household kitchen works already.",
@@ -181,7 +181,7 @@
       theme_dark: "Dunkles Design", theme_light: "Helles Design", tabs_label: "Bereiche",
       table: "Tabelle", chart: "Diagramm", empty: "Noch keine Daten – kommt mit deinem ersten Check-in",
       empty_period: "Nichts in diesem Zeitraum", load_error: "Daten konnten nicht geladen werden",
-      who: "Wer bist du?", who_sub: "Wähle dein Profil – dieses Gerät merkt es sich.", switch_profile: "Profil wechseln",
+      who: "Wer bist du?", who_sub: "Wähle dein Profil – dieses Gerät merkt es sich.", switch_profile: "Profil wechseln", connect_phone: "Handy verbinden (QR-Code)",
       profile_of: "Profil: {name}", household: "Haushalt", home_network: "Heimnetz",
       not_set_up: "noch nicht eingerichtet", no_consent: "{name} hat noch kein Interview gemacht",
       no_consent_hint: "Start: im Agenten „Richte mein Profil ein“ sagen. Bis {name} zustimmt, wird nichts erfasst – die Haushaltsküche funktioniert schon.",
@@ -2521,6 +2521,9 @@
     var foot = document.getElementById("foot");
     foot.innerHTML = "";
     [D.household ? T.foot_live_hh : T.foot_live, T.foot_raw, T.foot_credit].forEach(function (s) { foot.appendChild(el("span", null, s)); });
+    var qr = el("a", "link foot-switch", T.connect_phone || "Connect a phone");
+    qr.href = "/devices";
+    foot.appendChild(qr);
     if (state.profiles && state.profiles.members.length > 1) {
       var sw = el("button", "link foot-switch", T.switch_profile);
       sw.type = "button";
