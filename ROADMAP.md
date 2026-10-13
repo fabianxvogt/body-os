@@ -1,0 +1,24 @@
+# Roadmap
+
+## Now (v0 → v0.1)
+- Validate the check-in protocol on a real first two weeks (meal photos, substance shorthand,
+  training "A done", pantry purchases).
+- Pantry & cooking: purchase summaries, expiry statuses, suggestions with rubrics, cookbook ratings.
+
+## Next
+- Custom local dashboard (weight trend, protein, sleep vs. last substance time, training
+  progression, substance counts, pantry expiry) on top of `data/body-os.sqlite`.
+- Device receiver: local HTTP endpoint for an iOS Shortcut / Health Auto Export JSON → events
+  (dedupe, best-effort delivery).
+- Apple Health `export.zip` importer for history backfill.
+- Open Food Facts DE subset for barcoded products.
+
+## Later
+- Android Health Connect import.
+- USDA FoodData Central source for non-German users.
+- Re-interview diff tool (`bos plan diff`).
+- Chart generation for monthly reviews.
+
+## Done
+- 2026-10-13: v0 — agent manual, safety rules, interview catalog, modules, data format,
+  `bos` CLI with tests, BLS 4.0 import, demo persona, privacy git hooks, knowledge pages.

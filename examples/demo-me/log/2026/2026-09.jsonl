@@ -1,0 +1,17 @@
+{"id": "sleep-20260930065000-0001", "ts": "2026-09-30T06:50:00+02:00", "type": "sleep", "bed": "2026-09-29T23:10:00+02:00", "wake": "2026-09-30T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20260930070500-0002", "ts": "2026-09-30T07:05:00+02:00", "type": "weight", "kg": 78.4, "src": "device"}
+{"id": "measure-20260930071000-00d0", "ts": "2026-09-30T07:10:00+02:00", "type": "measure", "metric": "waist_cm", "value": 86.5, "unit": "cm", "src": "chat"}
+{"id": "drink-20260930073000-0003", "ts": "2026-09-30T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20260930074000-0004", "ts": "2026-09-30T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20260930080000-000a", "ts": "2026-09-30T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20260930100000-0005", "ts": "2026-09-30T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20260930124500-0007", "ts": "2026-09-30T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 35, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20260930125500-000b", "ts": "2026-09-30T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20260930143000-0006", "ts": "2026-09-30T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20260930150000-0008", "ts": "2026-09-30T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20260930153000-000c", "ts": "2026-09-30T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20260930180000-000d", "ts": "2026-09-30T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "meal-20260930191500-0009", "ts": "2026-09-30T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "substance-20260930203000-000e", "ts": "2026-09-30T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20260930210000-0010", "ts": "2026-09-30T21:00:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "substance-20260930214500-000f", "ts": "2026-09-30T21:45:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}

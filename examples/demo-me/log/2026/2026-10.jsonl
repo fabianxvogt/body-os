@@ -1,0 +1,199 @@
+{"id": "sleep-20261001065000-0011", "ts": "2026-10-01T06:50:00+02:00", "type": "sleep", "bed": "2026-09-30T23:10:00+02:00", "wake": "2026-10-01T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261001070500-0012", "ts": "2026-10-01T07:05:00+02:00", "type": "weight", "kg": 78.6, "src": "device"}
+{"id": "drink-20261001073000-0013", "ts": "2026-10-01T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261001074000-0014", "ts": "2026-10-01T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261001080000-0019", "ts": "2026-10-01T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261001100000-0015", "ts": "2026-10-01T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261001124500-0016", "ts": "2026-10-01T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 40, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261001125500-001a", "ts": "2026-10-01T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261001150000-0017", "ts": "2026-10-01T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261001153000-001b", "ts": "2026-10-01T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20261001180000-001c", "ts": "2026-10-01T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "training-20261001180000-0020", "ts": "2026-10-01T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "B", "dur_min": 50, "rpe": 7, "sets": [{"ex": "squat", "kg": 61, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 50, "reps": [8, 8, 6]}, {"ex": "row", "kg": 45, "reps": [10, 10]}], "src": "chat"}
+{"id": "meal-20261001191500-0018", "ts": "2026-10-01T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "substance-20261001203000-001d", "ts": "2026-10-01T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20261001210000-0021", "ts": "2026-10-01T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "substance-20261001214500-001e", "ts": "2026-10-01T21:45:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "substance-20261001224000-001f", "ts": "2026-10-01T22:40:00+02:00", "type": "substance", "kind": "joint", "count": 1, "tobacco": true, "trigger": "evening", "g": 0.3, "src": "chat"}
+{"id": "sleep-20261002065000-0022", "ts": "2026-10-02T06:50:00+02:00", "type": "sleep", "bed": "2026-10-02T00:20:00+02:00", "wake": "2026-10-02T06:50:00+02:00", "quality": 3, "wakeups": 2, "src": "chat"}
+{"id": "weight-20261002070500-0023", "ts": "2026-10-02T07:05:00+02:00", "type": "weight", "kg": 78.1, "src": "device"}
+{"id": "drink-20261002073000-0024", "ts": "2026-10-02T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261002074000-0025", "ts": "2026-10-02T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261002080000-002b", "ts": "2026-10-02T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261002100000-0026", "ts": "2026-10-02T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261002124500-0028", "ts": "2026-10-02T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 45, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261002125500-002c", "ts": "2026-10-02T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261002143000-0027", "ts": "2026-10-02T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261002150000-0029", "ts": "2026-10-02T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261002153000-002d", "ts": "2026-10-02T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20261002180000-002e", "ts": "2026-10-02T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "meal-20261002191500-002a", "ts": "2026-10-02T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "note-20261002200000-00d8", "ts": "2026-10-02T20:00:00+02:00", "type": "note", "text": "Fictional note: new running shoes.", "tags": ["training"], "src": "chat"}
+{"id": "substance-20261002203000-002f", "ts": "2026-10-02T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20261002210000-0031", "ts": "2026-10-02T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "substance-20261002214500-0030", "ts": "2026-10-02T21:45:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "training-20261003070000-0040", "ts": "2026-10-03T07:00:00+02:00", "type": "training", "kind": "run", "dur_min": 65, "distance_km": 11.5, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "weight-20261003070500-0033", "ts": "2026-10-03T07:05:00+02:00", "type": "weight", "kg": 78.0, "src": "device"}
+{"id": "drink-20261003073000-0034", "ts": "2026-10-03T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261003074000-0035", "ts": "2026-10-03T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261003080000-003b", "ts": "2026-10-03T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "sleep-20261003081500-0032", "ts": "2026-10-03T08:15:00+02:00", "type": "sleep", "bed": "2026-10-02T23:10:00+02:00", "wake": "2026-10-03T08:15:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "drink-20261003100000-0036", "ts": "2026-10-03T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261003124500-0037", "ts": "2026-10-03T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 35, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261003125500-003c", "ts": "2026-10-03T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261003150000-0038", "ts": "2026-10-03T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261003153000-003d", "ts": "2026-10-03T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "meal-20261003160000-003a", "ts": "2026-10-03T16:00:00+02:00", "type": "meal", "slot": "snack", "desc": "apple and a handful of nuts", "src": "chat"}
+{"id": "substance-20261003180000-003e", "ts": "2026-10-03T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "meal-20261003191500-0039", "ts": "2026-10-03T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "substance-20261003203000-003f", "ts": "2026-10-03T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20261003210000-0041", "ts": "2026-10-03T21:00:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "drink-20261004073000-0043", "ts": "2026-10-04T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261004074000-0044", "ts": "2026-10-04T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261004080000-0049", "ts": "2026-10-04T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "sleep-20261004081500-0042", "ts": "2026-10-04T08:15:00+02:00", "type": "sleep", "bed": "2026-10-03T23:10:00+02:00", "wake": "2026-10-04T08:15:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "drink-20261004100000-0045", "ts": "2026-10-04T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "training-20261004110000-004f", "ts": "2026-10-04T11:00:00+02:00", "type": "training", "kind": "walk", "dur_min": 60, "distance_km": 5.0, "src": "chat"}
+{"id": "meal-20261004124500-0047", "ts": "2026-10-04T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 40, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261004125500-004a", "ts": "2026-10-04T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261004143000-0046", "ts": "2026-10-04T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261004150000-0048", "ts": "2026-10-04T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261004153000-004b", "ts": "2026-10-04T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20261004180000-004c", "ts": "2026-10-04T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "drink-20261004200000-004e", "ts": "2026-10-04T20:00:00+02:00", "type": "drink", "kind": "alcohol", "ml": 1000, "alcohol_units": 4.0, "note": "two beers with friends", "src": "chat"}
+{"id": "substance-20261004203000-004d", "ts": "2026-10-04T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20261004210000-0050", "ts": "2026-10-04T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 3, "stress": 2, "src": "chat"}
+{"id": "sleep-20261005065000-0051", "ts": "2026-10-05T06:50:00+02:00", "type": "sleep", "bed": "2026-10-04T23:10:00+02:00", "wake": "2026-10-05T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261005070500-0052", "ts": "2026-10-05T07:05:00+02:00", "type": "weight", "kg": 77.9, "src": "device"}
+{"id": "drink-20261005073000-0053", "ts": "2026-10-05T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261005074000-0054", "ts": "2026-10-05T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261005080000-0059", "ts": "2026-10-05T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261005100000-0055", "ts": "2026-10-05T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261005124500-0056", "ts": "2026-10-05T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 45, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261005125500-005a", "ts": "2026-10-05T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261005150000-0057", "ts": "2026-10-05T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261005153000-005b", "ts": "2026-10-05T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "symptom-20261005160000-00ce", "ts": "2026-10-05T16:00:00+02:00", "type": "symptom", "desc": "mild headache after the long meeting", "severity": 2, "src": "chat"}
+{"id": "substance-20261005180000-005c", "ts": "2026-10-05T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "training-20261005180000-005f", "ts": "2026-10-05T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "A", "dur_min": 50, "rpe": 7, "sets": [{"ex": "squat", "kg": 65, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 50, "reps": [8, 8, 6]}, {"ex": "row", "kg": 45, "reps": [10, 10]}], "src": "chat"}
+{"id": "meal-20261005191500-0058", "ts": "2026-10-05T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "substance-20261005203000-005d", "ts": "2026-10-05T20:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "social", "src": "chat"}
+{"id": "checkin-20261005210000-0060", "ts": "2026-10-05T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "substance-20261005224000-005e", "ts": "2026-10-05T22:40:00+02:00", "type": "substance", "kind": "joint", "count": 1, "tobacco": true, "trigger": "evening", "g": 0.3, "src": "chat"}
+{"id": "sleep-20261006065000-0061", "ts": "2026-10-06T06:50:00+02:00", "type": "sleep", "bed": "2026-10-06T00:20:00+02:00", "wake": "2026-10-06T06:50:00+02:00", "quality": 3, "wakeups": 2, "src": "chat"}
+{"id": "weight-20261006070500-0062", "ts": "2026-10-06T07:05:00+02:00", "type": "weight", "kg": 78.2, "src": "device"}
+{"id": "drink-20261006073000-0063", "ts": "2026-10-06T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261006074000-0064", "ts": "2026-10-06T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261006080000-006a", "ts": "2026-10-06T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261006100000-0065", "ts": "2026-10-06T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261006124500-0067", "ts": "2026-10-06T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 35, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261006125500-006b", "ts": "2026-10-06T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261006143000-0066", "ts": "2026-10-06T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261006150000-0068", "ts": "2026-10-06T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261006153000-006c", "ts": "2026-10-06T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "training-20261006173000-006e", "ts": "2026-10-06T17:30:00+02:00", "type": "training", "kind": "run", "dur_min": 40, "distance_km": 7.2, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "substance-20261006180000-006d", "ts": "2026-10-06T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "meal-20261006191500-0069", "ts": "2026-10-06T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261006210000-006f", "ts": "2026-10-06T21:00:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "sleep-20261007065000-0070", "ts": "2026-10-07T06:50:00+02:00", "type": "sleep", "bed": "2026-10-06T23:10:00+02:00", "wake": "2026-10-07T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261007070500-0071", "ts": "2026-10-07T07:05:00+02:00", "type": "weight", "kg": 77.8, "src": "device"}
+{"id": "measure-20261007071500-00d2", "ts": "2026-10-07T07:15:00+02:00", "type": "measure", "metric": "resting_hr", "value": 58, "unit": "bpm", "src": "device"}
+{"id": "measure-20261007072000-00d3", "ts": "2026-10-07T07:20:00+02:00", "type": "measure", "metric": "bp", "sys": 124, "dia": 79, "pulse": 60, "src": "device"}
+{"id": "drink-20261007073000-0072", "ts": "2026-10-07T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261007074000-0073", "ts": "2026-10-07T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261007080000-0078", "ts": "2026-10-07T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261007100000-0074", "ts": "2026-10-07T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261007124500-0075", "ts": "2026-10-07T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 40, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261007125500-0079", "ts": "2026-10-07T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261007150000-0076", "ts": "2026-10-07T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261007153000-007a", "ts": "2026-10-07T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20261007180000-007b", "ts": "2026-10-07T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "meal-20261007191500-0077", "ts": "2026-10-07T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261007210000-007c", "ts": "2026-10-07T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "sleep-20261008065000-007d", "ts": "2026-10-08T06:50:00+02:00", "type": "sleep", "bed": "2026-10-07T23:10:00+02:00", "wake": "2026-10-08T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261008070500-007e", "ts": "2026-10-08T07:05:00+02:00", "type": "weight", "kg": 77.6, "src": "device"}
+{"id": "drink-20261008073000-007f", "ts": "2026-10-08T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261008074000-0080", "ts": "2026-10-08T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261008080000-0086", "ts": "2026-10-08T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261008100000-0081", "ts": "2026-10-08T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "lab-20261008100000-00d5", "ts": "2026-10-08T10:00:00+02:00", "type": "lab", "test": "vitamin_d_25oh", "value": 21.0, "unit": "ng/ml", "ref_low": 30, "ref_high": 100, "lab_date": "2026-10-06", "src": "import"}
+{"id": "lab-20261008100000-00d6", "ts": "2026-10-08T10:00:00+02:00", "type": "lab", "test": "ferritin", "value": 95, "unit": "ng/ml", "ref_low": 30, "ref_high": 400, "lab_date": "2026-10-06", "src": "import"}
+{"id": "meal-20261008124500-0083", "ts": "2026-10-08T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 45, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261008125500-0087", "ts": "2026-10-08T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261008143000-0082", "ts": "2026-10-08T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261008150000-0084", "ts": "2026-10-08T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261008153000-0088", "ts": "2026-10-08T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "substance-20261008180000-0089", "ts": "2026-10-08T18:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "evening", "src": "chat"}
+{"id": "training-20261008180000-008b", "ts": "2026-10-08T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "B", "dur_min": 50, "rpe": 7, "sets": [{"ex": "squat", "kg": 68, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 50, "reps": [8, 8, 6]}, {"ex": "row", "kg": 45, "reps": [10, 10]}], "src": "chat"}
+{"id": "meal-20261008191500-0085", "ts": "2026-10-08T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261008210000-008c", "ts": "2026-10-08T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "substance-20261008224000-008a", "ts": "2026-10-08T22:40:00+02:00", "type": "substance", "kind": "joint", "count": 1, "tobacco": true, "trigger": "evening", "g": 0.3, "src": "chat"}
+{"id": "sleep-20261009065000-008d", "ts": "2026-10-09T06:50:00+02:00", "type": "sleep", "bed": "2026-10-09T00:20:00+02:00", "wake": "2026-10-09T06:50:00+02:00", "quality": 3, "wakeups": 2, "src": "chat"}
+{"id": "drink-20261009073000-008e", "ts": "2026-10-09T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261009074000-008f", "ts": "2026-10-09T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261009080000-0094", "ts": "2026-10-09T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261009100000-0090", "ts": "2026-10-09T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261009124500-0091", "ts": "2026-10-09T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 35, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261009125500-0095", "ts": "2026-10-09T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261009150000-0092", "ts": "2026-10-09T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261009153000-0096", "ts": "2026-10-09T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "meal-20261009191500-0093", "ts": "2026-10-09T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261009210000-0097", "ts": "2026-10-09T21:00:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 3, "src": "chat"}
+{"id": "note-20261009213000-00d7", "ts": "2026-10-09T21:30:00+02:00", "type": "note", "text": "Fictional note: planning to skip the evening cigarette this week.", "tags": ["substances", "plan"], "src": "chat"}
+{"id": "training-20261010070000-00a5", "ts": "2026-10-10T07:00:00+02:00", "type": "training", "kind": "run", "dur_min": 65, "distance_km": 11.5, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "weight-20261010070500-0099", "ts": "2026-10-10T07:05:00+02:00", "type": "weight", "kg": 77.7, "src": "device"}
+{"id": "drink-20261010073000-009a", "ts": "2026-10-10T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261010074000-009b", "ts": "2026-10-10T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261010080000-00a2", "ts": "2026-10-10T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "sleep-20261010081500-0098", "ts": "2026-10-10T08:15:00+02:00", "type": "sleep", "bed": "2026-10-09T23:10:00+02:00", "wake": "2026-10-10T08:15:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "drink-20261010100000-009c", "ts": "2026-10-10T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261010124500-009e", "ts": "2026-10-10T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 40, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261010125500-00a3", "ts": "2026-10-10T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261010143000-009d", "ts": "2026-10-10T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261010150000-009f", "ts": "2026-10-10T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261010153000-00a4", "ts": "2026-10-10T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "meal-20261010160000-00a1", "ts": "2026-10-10T16:00:00+02:00", "type": "meal", "slot": "snack", "desc": "apple and a handful of nuts", "src": "chat"}
+{"id": "meal-20261010191500-00a0", "ts": "2026-10-10T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261010210000-00a6", "ts": "2026-10-10T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "weight-20261011070500-00a8", "ts": "2026-10-11T07:05:00+02:00", "type": "weight", "kg": 77.4, "src": "device"}
+{"id": "drink-20261011073000-00a9", "ts": "2026-10-11T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261011074000-00aa", "ts": "2026-10-11T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261011080000-00ae", "ts": "2026-10-11T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "sleep-20261011081500-00a7", "ts": "2026-10-11T08:15:00+02:00", "type": "sleep", "bed": "2026-10-10T23:10:00+02:00", "wake": "2026-10-11T08:15:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "drink-20261011100000-00ab", "ts": "2026-10-11T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "training-20261011110000-00b3", "ts": "2026-10-11T11:00:00+02:00", "type": "training", "kind": "walk", "dur_min": 60, "distance_km": 5.0, "src": "chat"}
+{"id": "meal-20261011124500-00ac", "ts": "2026-10-11T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 45, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261011125500-00af", "ts": "2026-10-11T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261011150000-00ad", "ts": "2026-10-11T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "substance-20261011153000-00b0", "ts": "2026-10-11T15:30:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "stress", "src": "chat"}
+{"id": "drink-20261011200000-00b2", "ts": "2026-10-11T20:00:00+02:00", "type": "drink", "kind": "alcohol", "ml": 1000, "alcohol_units": 4.0, "note": "two beers with friends", "src": "chat"}
+{"id": "checkin-20261011210000-00b4", "ts": "2026-10-11T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 3, "stress": 2, "src": "chat"}
+{"id": "substance-20261011224000-00b1", "ts": "2026-10-11T22:40:00+02:00", "type": "substance", "kind": "joint", "count": 1, "tobacco": true, "trigger": "evening", "g": 0.3, "src": "chat"}
+{"id": "sleep-20261012065000-00b5", "ts": "2026-10-12T06:50:00+02:00", "type": "sleep", "bed": "2026-10-12T00:20:00+02:00", "wake": "2026-10-12T06:50:00+02:00", "quality": 3, "wakeups": 2, "src": "chat"}
+{"id": "weight-20261012070500-00b6", "ts": "2026-10-12T07:05:00+02:00", "type": "weight", "kg": 77.5, "src": "device"}
+{"id": "drink-20261012073000-00b7", "ts": "2026-10-12T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261012074000-00b8", "ts": "2026-10-12T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261012080000-00be", "ts": "2026-10-12T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "symptom-20261012090000-00cf", "ts": "2026-10-12T09:00:00+02:00", "type": "symptom", "desc": "sore left calf after run", "severity": 3, "src": "chat"}
+{"id": "drink-20261012100000-00b9", "ts": "2026-10-12T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261012124500-00bb", "ts": "2026-10-12T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 35, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261012125500-00bf", "ts": "2026-10-12T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261012143000-00ba", "ts": "2026-10-12T14:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 150, "caffeine_mg": 80, "src": "chat"}
+{"id": "drink-20261012150000-00bc", "ts": "2026-10-12T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "training-20261012180000-00c0", "ts": "2026-10-12T18:00:00+02:00", "type": "training", "kind": "strength", "plan": "A", "dur_min": 50, "rpe": 7, "sets": [{"ex": "squat", "kg": 72, "reps": [8, 8, 8]}, {"ex": "bench press", "kg": 50, "reps": [8, 8, 6]}, {"ex": "row", "kg": 45, "reps": [10, 10]}], "src": "chat"}
+{"id": "meal-20261012191500-00bd", "ts": "2026-10-12T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261012210000-00c1", "ts": "2026-10-12T21:00:00+02:00", "type": "checkin", "energy": 4, "mood": 4, "stress": 2, "src": "chat"}
+{"id": "sleep-20261013065000-00c2", "ts": "2026-10-13T06:50:00+02:00", "type": "sleep", "bed": "2026-10-12T23:10:00+02:00", "wake": "2026-10-13T06:50:00+02:00", "quality": 4, "wakeups": 1, "src": "chat"}
+{"id": "weight-20261013070500-00c3", "ts": "2026-10-13T07:05:00+02:00", "type": "weight", "kg": 77.3, "src": "device"}
+{"id": "measure-20261013071000-00d1", "ts": "2026-10-13T07:10:00+02:00", "type": "measure", "metric": "waist_cm", "value": 85.5, "unit": "cm", "src": "chat"}
+{"id": "measure-20261013072000-00d4", "ts": "2026-10-13T07:20:00+02:00", "type": "measure", "metric": "bp", "sys": 121, "dia": 78, "pulse": 59, "src": "device"}
+{"id": "drink-20261013073000-00c4", "ts": "2026-10-13T07:30:00+02:00", "type": "drink", "kind": "coffee", "ml": 200, "caffeine_mg": 90, "src": "chat"}
+{"id": "meal-20261013074000-00c5", "ts": "2026-10-13T07:40:00+02:00", "type": "meal", "slot": "breakfast", "desc": "oats with milk and banana", "items": [{"name": "oat flakes", "g": 60, "food_id": "bls:C133000"}, {"name": "milk 1.5%", "g": 200}, {"name": "banana", "g": 100}], "kcal": 470, "protein_g": 19, "carbs_g": 72, "fat_g": 10, "fiber_g": 7, "src": "chat"}
+{"id": "substance-20261013080000-00ca", "ts": "2026-10-13T08:00:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "after-meal", "src": "chat"}
+{"id": "drink-20261013100000-00c6", "ts": "2026-10-13T10:00:00+02:00", "type": "drink", "kind": "water", "ml": 500, "src": "chat"}
+{"id": "meal-20261013124500-00c7", "ts": "2026-10-13T12:45:00+02:00", "type": "meal", "slot": "lunch", "desc": "canteen bowl with chicken and rice", "kcal": 720, "protein_g": 40, "carbs_g": 85, "fat_g": 22, "fiber_g": 6, "src": "estimate", "conf": "med"}
+{"id": "substance-20261013125500-00cb", "ts": "2026-10-13T12:55:00+02:00", "type": "substance", "kind": "cigarette", "count": 1, "tobacco": true, "trigger": "break", "src": "chat"}
+{"id": "drink-20261013150000-00c8", "ts": "2026-10-13T15:00:00+02:00", "type": "drink", "kind": "water", "ml": 750, "src": "chat"}
+{"id": "training-20261013173000-00cc", "ts": "2026-10-13T17:30:00+02:00", "type": "training", "kind": "run", "dur_min": 40, "distance_km": 7.2, "avg_hr": 148, "rpe": 6, "src": "device"}
+{"id": "meal-20261013191500-00c9", "ts": "2026-10-13T19:15:00+02:00", "type": "meal", "slot": "dinner", "desc": "pasta with tomato sauce and lentils", "kcal": 780, "protein_g": 32, "carbs_g": 110, "fat_g": 18, "fiber_g": 12, "src": "chat"}
+{"id": "checkin-20261013210000-00cd", "ts": "2026-10-13T21:00:00+02:00", "type": "checkin", "energy": 3, "mood": 4, "stress": 3, "src": "chat"}
