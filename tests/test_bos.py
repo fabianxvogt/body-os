@@ -1283,7 +1283,9 @@ class TestLanServer(TempHousehold):
             self.assertEqual(self.get("/api/profiles", host=host)[0], 200, host)
         for ip in bos.lan_ipv4s():
             self.assertEqual(self.get("/api/profiles", host="%s:%d" % (ip, p))[0], 200, ip)
-        for host in ("bodyos.home:%d" % p, "localhost:1", "localhost", "evil.example:%d" % p, "a:b:%d" % p):
+        for host in ("localhost:1", "localhost", "127.0.0.1:8040"):  # loopback names on any port (SSH tunnels)
+            self.assertEqual(self.get("/api/profiles", host=host)[0], 200, host)
+        for host in ("bodyos.home:%d" % p, "evil.example:%d" % p, "evil.example:1", "a:b:%d" % p):
             self.assertEqual(self.get("/api/profiles", host=host)[0], 403, host)
         cfg = bos.load_server_config(self.key_path)
         cfg["allowed_hosts"] = ["BodyOS.home"]
