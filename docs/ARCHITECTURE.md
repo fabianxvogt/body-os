@@ -37,7 +37,7 @@ engine and configure it in `me/`.
 
 ```
 chat / photo / device export ──agent──▶ me/*.jsonl ──bos build──▶ data/body-os.sqlite ──▶ Datasette raw tables
-                                         me/*.jsonl ──bos dashboard──▶ 127.0.0.1 chart dashboard (live, read-only)
+me/*.jsonl, settings, plans, reviews ──bos dashboard──▶ 127.0.0.1 tab dashboard (live, read-only)
 public food data ──bos foods-import──▶ data/foods.sqlite ──bos food──▶ nutrient estimates
 ```
 

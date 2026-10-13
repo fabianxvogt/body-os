@@ -167,15 +167,20 @@ class TestPantry(TempMe):
             "cheese-0001": "check", "banana-0001": "check",
             "yogurt-0001": "discard", "spinach-0001": "discard", "jam-0001": "discard",
             "chicken-0001": "gone", "bread-0001": "gone", "tomato-0001": "gone",
+            # added for the dashboard demo: groceries from other stores, waste, a freezer item
+            "thighs-0001": "ok", "mushroom-0001": "ok", "berries-0001": "ok", "skyr-0001": "ok",
+            "salad-0001": "gone", "carrot-0001": "gone", "sourdough-0001": "gone",
         }
         self.assertEqual({k: v["status"] for k, v in st.items()}, expected)
         self.assertEqual(st["oats-0001"]["remaining"], 880)
         self.assertEqual(st["rice-0001"]["remaining"], 600)
         self.assertEqual(st["tofu-0001"]["expires"], "2026-10-15")  # open event re-estimates expiry
         self.assertTrue(st["milk-0001"]["opened"])
+        self.assertEqual(st["salad-0001"]["gone_at"], "2026-10-08")  # discard date, for waste stats
+        self.assertNotIn("gone_at", st["oats-0001"])
         code, out, _ = self.bos("pantry")
         self.assertEqual(code, 0)
-        self.assertNotIn("chicken", out)
+        self.assertNotIn("chicken breast", out)
         self.assertTrue(out.splitlines()[1].startswith("discard"))
         self.assertIn("check: slimy leaves", out)
         code, out, _ = self.bos("pantry", "--all")
@@ -296,28 +301,48 @@ class TestBuild(TempMe):
 
 
 class TestDashboard(TempMe):
-    KEYS = ("schema", "today", "period", "language", "targets", "training_plan", "week", "days", "previous",
-            "substance_kinds", "triggers_total", "trigger_order", "use_times", "sleep_vs_last_use", "lifts",
-            "measures", "pantry", "cookbook")
-    DAY_KEYS = ("day", "weight_kg", "weight_7d", "sleep_h", "sleep_quality", "wakeups", "kcal", "protein_g",
-                "water_ml", "caffeine_n", "last_caffeine", "alcohol_units", "substance_n", "tobacco_n", "triggers",
+    KEYS = ("schema", "today", "period", "language", "modules", "days", "previous", "tabs")
+    TABS = {
+        "today": ("phase", "next_decision", "checklist", "substances", "due", "pantry_alerts", "week",
+                  "training_plan", "focus", "spend_month"),
+        "body": ("corridor", "goals", "circumferences", "bp", "vitals", "labs"),
+        "nutrition": ("targets", "slots", "meal_times", "macros", "protein_sources", "items_with_protein"),
+        "kitchen": ("pantry", "purchases", "waste", "eating_out", "currency", "shopping_list", "cookbook",
+                    "cuisines_30d", "ratings", "skills"),
+        "sleep": ("nights", "regularity", "vs_last_use", "vs_coffee", "vs_alcohol", "vs_training"),
+        "substances": ("active", "substance_kinds", "triggers_total", "trigger_order", "use_times", "baseline",
+                       "target_per_day", "streaks", "plan_b", "cost"),
+        "training": ("plan", "schedule", "calendar", "lifts", "volume", "endurance", "tests", "next_goals"),
+        "journal": ("reviews", "timeline", "decisions"),
+    }
+    DAY_KEYS = ("day", "logged", "weight_kg", "weight_7d", "sleep_h", "sleep_quality", "wakeups", "meals",
+                "meals_missing_kcal", "kcal", "protein_g", "carbs_g", "fat_g", "water_ml", "caffeine_n",
+                "last_caffeine", "alcohol_units", "substance_n", "tobacco_n", "triggers", "first_substance",
                 "last_substance", "training_n", "training_min", "energy", "mood", "stress")
+
+    def assert_shape(self, d):
+        for k in self.KEYS:
+            self.assertIn(k, d)
+        self.assertEqual(set(d["tabs"]), set(self.TABS))
+        self.assertEqual(set(bos.DASHBOARD_TABS), set(self.TABS))
+        for tab, keys in self.TABS.items():
+            for k in keys:
+                self.assertIn(k, d["tabs"][tab], (tab, k))
+        for k in self.DAY_KEYS:
+            self.assertIn(k, d["days"][0])
+        json.dumps(d)  # JSON-serialisable
 
     def test_demo_data_matches_summary(self):
         ctx = bos.Ctx(self.me, self.data, DEMO_TODAY)
         d = bos.dashboard_data(ctx, "14")
-        for k in self.KEYS:
-            self.assertIn(k, d)
-        for k in self.DAY_KEYS:
-            self.assertIn(k, d["days"][0])
-        json.dumps(d)  # JSON-serialisable
+        self.assert_shape(d)
         self.assertEqual((d["period"]["from"], d["period"]["to"], d["period"]["days"]), ("2026-09-30", "2026-10-13", 14))
         p = bos.build_summary(ctx, dt.date(2026, 9, 30), dt.date(2026, 10, 13))
         srows = {r["day"]: r for r in p["days"]}
         for r in d["days"]:
             s = srows[r["day"]]
             for k in ("weight_kg", "substance_n", "tobacco_n", "training_n", "training_min", "caffeine_n",
-                      "last_substance", "kcal", "protein_g", "water_ml"):
+                      "last_substance", "kcal", "protein_g", "water_ml", "meals", "meals_missing_kcal"):
                 self.assertEqual(r[k], s[k], (r["day"], k))
             if s["sleep_h"] is not None:
                 self.assertAlmostEqual(r["sleep_h"], s["sleep_h"], places=2)
@@ -325,53 +350,194 @@ class TestDashboard(TempMe):
                 self.assertAlmostEqual(r["weight_7d"], s["weight_7d"], places=3)
             self.assertEqual(sum(r["triggers"].values()), r["substance_n"])
         per = p["period"]
+        U = d["tabs"]["substances"]
         self.assertEqual(sum(r["substance_n"] for r in d["days"]), sum(per["substances_total"].values()))
-        self.assertEqual(d["substance_kinds"], per["substances_total"])
-        self.assertEqual(d["triggers_total"], per["substance_triggers"])
-        self.assertEqual(sum(u["count"] for u in d["use_times"]), sum(per["substances_total"].values()))
-        self.assertTrue(all(0 <= u["weekday"] <= 6 and 0 <= u["hour"] <= 23 for u in d["use_times"]))
-        self.assertEqual(len(d["sleep_vs_last_use"]), sum(1 for r in p["days"] if r["sleep_h"] is not None))
-        svu = {r["day"]: r for r in d["sleep_vs_last_use"]}
+        self.assertEqual(U["substance_kinds"], per["substances_total"])
+        self.assertEqual(U["triggers_total"], per["substance_triggers"])
+        self.assertEqual(sum(u["count"] for u in U["use_times"]), sum(per["substances_total"].values()))
+        self.assertTrue(all(0 <= u["weekday"] <= 6 and 0 <= u["hour"] <= 23 for u in U["use_times"]))
+        S = d["tabs"]["sleep"]
+        self.assertEqual(len(S["vs_last_use"]), sum(1 for r in p["days"] if r["sleep_h"] is not None))
+        svu = {r["day"]: r for r in S["vs_last_use"]}
         self.assertEqual(svu["2026-10-02"]["last_use_prev_evening"], "22:40")  # 10-01 evening joint
         self.assertEqual(svu["2026-10-02"]["minutes_after_18"], 280)
-        # lifts: <= 4 exercises, Epley e1RM, top set per day
-        ex = d["lifts"]["exercises"]
+        night = {n["day"]: n for n in S["nights"]}["2026-10-02"]  # bed 00:20, wake 06:50, anchor 20:00
+        self.assertEqual((night["bed"], night["bed_min"], night["wake_min"]), ("00:20", 260, 650))
+        self.assertIsNotNone(S["regularity"]["bed_sd_min"])
+        self.assertEqual(S["vs_alcohol"]["some"]["n"], 2)  # two evenings with beers
+        # training: <= 4 exercises, Epley e1RM, top set per day, calendar, plan file
+        TR = d["tabs"]["training"]
+        ex = TR["lifts"]["exercises"]
         self.assertLessEqual(len(ex), 4)
         sq = {x["day"]: x for x in ex["squat"]}["2026-10-12"]
         self.assertEqual((sq["top_kg"], sq["top_reps"]), (72, 8))
         self.assertAlmostEqual(sq["e1rm"], round(72 * (1 + 8 / 30), 1))
-        self.assertEqual([m["value"] for m in d["measures"]["waist_cm"]], [86.5, 85.5])
-        self.assertEqual(len(d["measures"]["bp"]), 2)
-        # pantry: non-gone, urgency order, same statuses as `bos pantry`
-        self.assertEqual([x["item_id"] for x in d["pantry"]],
+        self.assertEqual(sum(v["kg"] for v in TR["volume"] if v["day"] == "2026-10-12"),
+                         72 * 24 + 50 * 22 + 45 * 20)
+        self.assertTrue(all(s["category"] in ("strength", "endurance", "other") for s in TR["calendar"]["sessions"]))
+        self.assertEqual({g["name"]: g["next_kg"] for g in TR["next_goals"]}["squat"], 74)
+        self.assertEqual({g["name"]: g["last_kg"] for g in TR["next_goals"]}["squat"], 72)
+        self.assertIn("test_pushups", TR["tests"])
+        self.assertTrue(all(e["pace_min_km"] > 0 for e in TR["endurance"] if e["pace_min_km"] is not None))
+        # body
+        B = d["tabs"]["body"]
+        self.assertEqual([m["value"] for m in B["circumferences"]["waist_cm"]["points"]], [86.5, 86.0, 85.5])
+        self.assertEqual(len(B["bp"]["points"]), 5)
+        self.assertEqual(B["bp"]["latest"]["category"], "normal")  # 121/78
+        self.assertEqual(bos.bp_category(118, 77), "optimal")
+        self.assertEqual(bos.bp_category(133, 82), "high_normal")
+        self.assertEqual(bos.bp_category(125, 91), "hypertension")
+        labs = {l["test"]: l for l in B["labs"]}
+        self.assertEqual((labs["vitamin_d_25oh"]["flag"], labs["vitamin_d_25oh"]["previous"]), ("low", 18.0))
+        self.assertEqual(B["corridor"]["anchor_day"], "2026-10-07")  # first weight of the current phase
+        self.assertEqual(B["corridor"]["rate"], [-2.0, -0.5])
+        # nutrition: protein band from goals x latest 7-day weight
+        N = d["tabs"]["nutrition"]
+        lo, hi = N["targets"]["protein_g"]
+        ref = N["targets"]["protein_basis"]["weight_kg"]  # rounded to 0.1 kg in the payload
+        self.assertAlmostEqual(lo, 1.6 * ref, delta=1)
+        self.assertAlmostEqual(hi, 2.0 * ref, delta=1)
+        self.assertEqual(N["targets"]["kcal"], [2100, 2400])
+        self.assertAlmostEqual(sum(N["macros"]["kcal_pct"].values()), 100, delta=0.2)
+        self.assertEqual(N["protein_sources"][0]["name"], "chicken breast")
+        self.assertEqual(sum(1 for r in N["slots"] for k in r if k != "day"),
+                         sum(1 for r in N["slots"] for k in r if k in bos.MEAL_SLOTS + ("other",)))
+        # kitchen: pantry like `bos pantry`, purchases with prices, waste = price x share left
+        K = d["tabs"]["kitchen"]
+        self.assertEqual([x["item_id"] for x in K["pantry"]],
                          [x["item_id"] for x in bos.pantry_state(ctx) if x["status"] != "gone"])
-        self.assertEqual(d["pantry"][0]["status"], "discard")
-        self.assertEqual(len(d["cookbook"]), 4)
-        self.assertEqual(d["cookbook"][0]["day"], max(c["day"] for c in d["cookbook"]))
-        self.assertEqual(d["targets"], {"protein_g": 140})
-        self.assertEqual(d["training_plan"], 4)
-        self.assertEqual(d["week"]["from"], "2026-10-12")
+        self.assertEqual(K["pantry"][0]["status"], "discard")
+        waste = {w["name"]: w for w in K["waste"]}
+        self.assertEqual((waste["salad mix"]["fraction"], waste["salad mix"]["eur"]), (0.5, 0.9))
+        self.assertEqual({p["store"] for p in K["purchases"]}, {"Demo Market", "Demo Discount", "Demo Bio Market"})
+        self.assertIn("Shopping list", K["shopping_list"])
+        self.assertEqual(len(K["cookbook"]), 7)
+        self.assertEqual(K["cookbook"][0]["day"], max(c["day"] for c in K["cookbook"]))
+        self.assertEqual([s["skill"] for s in K["skills"]][0], "deglazing")
+        self.assertTrue(all(o["eur"] > 0 for o in K["eating_out"]))
+        # today: phase, decisions, checklist, due items, focus from the latest weekly review
+        TD = d["tabs"]["today"]
+        self.assertEqual((TD["phase"]["id"], TD["phase"]["day"], TD["phase"]["of"]), ("tobacco-step-1", 7, 28))
+        self.assertEqual((TD["next_decision"]["date"], TD["next_decision"]["days_left"]), ("2026-10-20", 7))
+        self.assertTrue(all(c["done"] for c in TD["checklist"]))
+        self.assertEqual(TD["due"]["training"], [{"what": "endurance", "days": "tue", "done": True,
+                                                  "done_day": "2026-10-13"}])
+        self.assertEqual(TD["due"]["training_next"], {"day": "2026-10-15", "what": "strength"})
+        due = {m["metric"]: m for m in TD["due"]["measurements"]}
+        self.assertEqual(due["waist_cm"]["status"], "done")
+        self.assertEqual((due["bp"]["status"], due["bp"]["count"], due["bp"]["of"]), ("open", 1, 2))
+        self.assertEqual(TD["focus"]["file"], "2026-W41.md")
+        self.assertIn("protein snack", TD["focus"]["text"])
+        self.assertEqual(TD["week"]["from"], "2026-10-12")
+        self.assertEqual(TD["training_plan"], 4)
+        # substances: baseline, streaks, plan B, costs
+        self.assertEqual((U["baseline"]["phase_id"], U["baseline"]["days"]), ("baseline", 7))
+        base = sum(e.get("count", 1) for e in demo_events() if e["type"] == "substance" and e["tobacco"]
+                   and "2026-09-30" <= e["ts"][:10] <= "2026-10-06") / 7
+        self.assertAlmostEqual(U["baseline"]["per_day"], base, places=2)
+        self.assertEqual(U["target_per_day"], 4)
+        self.assertEqual((U["streaks"]["free_days"], U["streaks"]["longest"], U["streaks"]["current"]), (1, 1, 0))
+        pb = U["plan_b"]
+        self.assertEqual((pb["day"], pb["window_days"], pb["current_days"], pb["status"]), (7, 14, 6, "on_track"))
+        self.assertLess(pb["pct_of_baseline"], 90)
+        self.assertEqual(U["cost"]["missing"], [])
+        self.assertAlmostEqual(U["cost"]["tobacco_eur_per_use"], 0.28)
+        self.assertGreater(U["cost"]["saved"]["eur"], 0)
         # 'all' starts at the first logged day; bad periods are rejected
         self.assertEqual(bos.dashboard_data(ctx, "all")["period"]["from"], "2026-09-30")
         self.assertEqual(len(bos.dashboard_data(ctx, 30)["days"]), 30)
         with self.assertRaises(bos.BosError):
             bos.dashboard_data(ctx, "7")
 
+    def test_cost_model(self):
+        cs = bos.cost_settings({"costs": {"tobacco_eur_per_g": 0.4, "tobacco_g_per_use": 0.5, "cannabis_eur_per_g": 10,
+                                          "cannabis_g_per_use": 0.3, "alcohol_eur_per_unit": 2,
+                                          "coffee_eur_per_cup_home": 0.3}})
+        c = lambda ev: [(cat, round(eur, 3) if eur is not None else None, est) for cat, eur, est in bos.event_costs(ev, cs)]
+        self.assertEqual(c({"type": "substance", "kind": "cigarette", "count": 2}), [("tobacco", 0.4, True)])
+        self.assertEqual(c({"type": "substance", "kind": "joint", "tobacco": True, "g": 0.5}),
+                         [("tobacco", 0.2, True), ("cannabis", 5.0, True)])
+        self.assertEqual(c({"type": "substance", "kind": "joint", "tobacco": False}), [("cannabis", 3.0, True)])
+        self.assertEqual(c({"type": "substance", "kind": "cannabis_vape"}), [("cannabis", 3.0, True)])
+        self.assertEqual(c({"type": "substance", "kind": "joint", "price_eur": 8}), [("cannabis", 8, False)])
+        self.assertEqual(c({"type": "drink", "kind": "alcohol", "ml": 500, "alcohol_units": 2}), [("alcohol", 4, True)])
+        self.assertEqual(c({"type": "drink", "kind": "coffee", "ml": 200}), [("coffee", 0.3, True)])
+        self.assertEqual(c({"type": "drink", "kind": "coffee", "ml": 200, "price_eur": 3.2}), [("coffee", 3.2, False)])
+        self.assertEqual(c({"type": "drink", "kind": "water", "ml": 500}), [])
+        self.assertEqual(c({"type": "meal", "desc": "home pasta"}), [])  # groceries count at purchase
+        self.assertEqual(c({"type": "meal", "desc": "canteen", "price_eur": 7}), [("out", 7, False)])
+        none = bos.cost_settings({})
+        self.assertEqual(bos.event_costs({"type": "substance", "kind": "cigarette"}, none), [("tobacco", None, True)])
+        self.assertEqual(none["currency"], "EUR")
+        # demo month spend adds up and marks estimates
+        d = bos.dashboard_data(bos.Ctx(self.me, self.data, DEMO_TODAY), "14")
+        sp = d["tabs"]["today"]["spend_month"]
+        self.assertEqual([c["key"] for c in sp["categories"]], list(bos.COST_CATEGORIES))
+        self.assertAlmostEqual(sp["total"], sum(c["eur"] for c in sp["categories"]), places=2)
+        cats = {c["key"]: c for c in sp["categories"]}
+        self.assertFalse(cats["groceries"]["est"])
+        self.assertTrue(cats["tobacco"]["est"])
+        self.assertEqual(sp["unknown"], 0)
+
+    def test_settings_helpers(self):
+        today = dt.date(2026, 10, 13)  # a Tuesday
+        self.assertEqual(bos.extract_focus("# R\n## Fokus der Woche\n- **Eins** tun\n- zwei\n"), "**Eins** tun")
+        self.assertEqual(bos.extract_focus("## Focus\n\nOne paragraph\nwrapped.\n\n## Next"), "One paragraph wrapped.")
+        self.assertEqual(bos.extract_focus("- Next week's focus: walk daily"), "walk daily")
+        self.assertIsNone(bos.extract_focus("# nothing here"))
+        self.assertEqual(bos._measure_due("weekly:tue", set(), today), {"status": "due"})
+        self.assertEqual(bos._measure_due("weekly:tue", {dt.date(2026, 10, 9)}, today), {"status": "done"})
+        self.assertIsNone(bos._measure_due("weekly:mon", set(), today))
+        self.assertEqual(bos._measure_due("monthly:first-sun", set(), dt.date(2026, 10, 4)), {"status": "due"})
+        self.assertIsNone(bos._measure_due("monthly:first-sun", set(), dt.date(2026, 10, 11)))
+        self.assertEqual(bos._measure_due("2x-week", {dt.date(2026, 10, 12)}, today), {"status": "open", "count": 1, "of": 2})
+        sat = {dt.date(2026, 10, 17): [{"kind": "run"}]}
+        due, nxt = bos.training_due({"training": {"schedule": {"sat|sun": "endurance"}}}, sat, dt.date(2026, 10, 18))
+        self.assertEqual(due[0]["done_day"], "2026-10-17")  # either-day rule: Saturday counts for Sunday
+        due, nxt = bos.training_due({"training": {"schedule": {"sat|sun": "endurance"}}}, {}, today)
+        self.assertEqual((due, nxt), ([], {"day": "2026-10-17", "what": "endurance"}))
+        phases = bos.settings_phases({"phases": [{"id": "b", "from": "2026-10-01"}, {"id": "x", "from": "bad"}]})
+        self.assertEqual([p["id"] for p in phases], ["b"])
+        self.assertEqual(bos.phase_json(phases[0], today)["of"], None)
+
     def test_empty_instance_gives_valid_empty_structure(self):
         empty = os.path.join(self.tmp, "empty")
         os.makedirs(empty)
         for period in ("14", "all"):
             d = bos.dashboard_data(bos.Ctx(empty, self.data, DEMO_TODAY), period)
-            for k in self.KEYS:
-                self.assertIn(k, d)
+            self.assert_shape(d)
             self.assertEqual(d["period"]["days_logged"], 0)
             self.assertEqual(len(d["days"]), 14)
             self.assertTrue(all(r["weight_kg"] is None and r["substance_n"] == 0 for r in d["days"]))
-            for k in ("use_times", "sleep_vs_last_use", "pantry", "cookbook", "trigger_order"):
-                self.assertEqual(d[k], [])
-            self.assertEqual(d["lifts"], {"exercises": {}, "others": []})
+            T = d["tabs"]
+            for tab, k in (("substances", "use_times"), ("sleep", "vs_last_use"), ("sleep", "nights"),
+                           ("kitchen", "pantry"), ("kitchen", "cookbook"), ("kitchen", "waste"),
+                           ("kitchen", "purchases"), ("substances", "trigger_order"), ("body", "labs"),
+                           ("journal", "reviews"), ("journal", "timeline"), ("journal", "decisions"),
+                           ("training", "next_goals"), ("nutrition", "protein_sources")):
+                self.assertEqual(T[tab][k], [], (tab, k))
+            for tab, k in (("today", "phase"), ("today", "focus"), ("today", "next_decision"), ("body", "corridor"),
+                           ("substances", "plan_b"), ("substances", "baseline"), ("kitchen", "shopping_list")):
+                self.assertIsNone(T[tab][k], (tab, k))
+            self.assertEqual(T["training"]["lifts"], {"exercises": {}, "others": []})
+            self.assertFalse(T["substances"]["active"])
+            self.assertEqual(T["today"]["spend_month"]["total"], 0)
+            self.assertEqual([c["key"] for c in T["today"]["checklist"]], ["weight", "sleep", "meals", "checkin"])
             self.assertEqual(d["language"], "en")
-            json.dumps(d)
+
+    def test_review_files_whitelist_and_traversal(self):
+        rdir = os.path.join(self.me, "reviews")
+        self.assertEqual(bos.review_files(self.me), ["2026-W41.md", "2026-W40.md", "2026-09.md"])
+        with open(os.path.join(self.me, "secret.md"), "w") as f:
+            f.write("secret")
+        with open(os.path.join(rdir, "notes.md"), "w") as f:
+            f.write("not a review")
+        os.symlink(os.path.join(self.me, "secret.md"), os.path.join(rdir, "2026-W01.md"))
+        self.assertIn("Fokus der Woche", bos.review_text(self.me, "2026-W40.md"))
+        for bad in ("../secret.md", "notes.md", "2026-W41.md/..", "..%2Fsecret.md", "2026-W41.MD", "",
+                    "/etc/passwd", "2026-W1.md", "2026-W41.md\x00", "2026-W01.md"):
+            self.assertIsNone(bos.review_text(self.me, bad), bad)
+        self.assertNotIn("2026-W01.md", bos.review_files(self.me))  # symlink escaping reviews/ is not listed
 
     def test_server_serves_static_and_api_only(self):
         import http.client
@@ -409,6 +575,16 @@ class TestDashboard(TempMe):
                         "/.hidden", "/nope.js", "/vendor/ECHARTS-LICENSE"):
                 self.assertIn(get(bad)[0], (403, 404), bad)
             self.assertEqual(get("/app.js")[0], 200)
+            self.assertEqual(get("/markdown.js")[0], 200)
+            code, ctype, body = get("/api/review?file=2026-W41.md")
+            self.assertEqual((code, json.loads(body)["file"]), (200, "2026-W41.md"))
+            self.assertIn("Next week's focus", json.loads(body)["text"])
+            for bad in ("../settings.json", "..%2Fsettings.json", "2026-W41.md%2F..", "%2E%2E/profile.md",
+                        "notes.md", "", "2026-W41.md%00"):
+                self.assertEqual(get("/api/review?file=" + bad)[0], 400, bad)
+            self.assertEqual(get("/api/review")[0], 400)
+            self.assertEqual(get("/api/review?file=2020-W01.md")[0], 404)
+            self.assertEqual(get("/api/review?file=2026-W41.md", host="evil.example:%d" % port)[0], 403)
             self.assertEqual(get("/vendor/echarts.min.js")[0], 200)
             self.assertEqual(get("/api/data?days=14", host="evil.example:%d" % port)[0], 403)  # DNS rebinding
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)

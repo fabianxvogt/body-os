@@ -7,7 +7,7 @@ training, substances, body metrics and your pantry, runs weekly reviews, and tea
 numbers mean.
 
 > **Status: early (v0).** Core logging, summaries, pantry expiry logic, food lookup (German BLS 4.0),
-> a local chart dashboard (`bos dashboard`) and a Datasette raw-table view work. Phone/wearable sync
+> a local multi-tab dashboard (`bos dashboard`) and a Datasette raw-table view work. Phone/wearable sync
 > is on the [roadmap](ROADMAP.md). Not a medical device — see [SAFETY.md](SAFETY.md).
 
 ## How it works
@@ -42,9 +42,10 @@ reviews — see [modules/](modules/README.md).
 ## Tools
 
 `tools/bos.py` (Python 3.9+, stdlib only): `init`, `doctor`, `log`, `pantry-log`, `validate`,
-`summary`, `pantry`, `build`, `dash` (Datasette raw tables), `dashboard` (charts: weight, protein, sleep vs.
-last substance time, triggers and habit times, training, pantry — served read-only on 127.0.0.1, live
-from `me/`, no external requests), `foods-import`, `food search|calc`. Tests:
+`summary`, `pantry`, `build`, `dash` (Datasette raw tables), `dashboard` (eight tabs — Today, Body,
+Nutrition, Kitchen, Sleep & energy, Substances, Training, Journal — with plan phases, due items,
+goal corridors, costs and reviews; served read-only on 127.0.0.1, live from `me/`, no external
+requests), `foods-import`, `food search|calc`. Tests:
 `python3 -m unittest discover -s tests`.
 
 ## Data sources and credits

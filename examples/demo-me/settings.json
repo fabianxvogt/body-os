@@ -6,15 +6,33 @@
   "units": "metric",
   "effort": "5min",
   "modules": ["core", "sleep", "nutrition", "training", "substances", "pantry", "health-checks", "reviews"],
-  "plans": [],
-  "privacy": { "storage": "local", "agent_reads": "summaries-preferred", "store_photos": false },
-  "checkin": { "channels": ["desktop"] },
-  "devices": { "phone": "android", "bathroom_scale": true, "kitchen_scale": false, "tape": true, "bp_monitor": true, "wearable": "running-watch", "sync": "manual-export" },
-  "nutrition": { "show_numbers": true, "sources": ["bls"], "targets": { "protein_g": 140 } },
-  "household": { "members": 1, "portions_default": 1, "shared_notes": [] },
-  "kitchen": { "devices": ["stove", "oven"], "platforms": [] },
-  "pantry": { "mode": "auto", "store_prices": true, "grace_days": { "best_before": 7, "none": 2 } },
-  "cooking": { "options": 4, "max_minutes_weekday": 30 },
-  "reviews": { "weekly": "sunday-evening", "monthly": "first-sunday", "reminders": "user-phone" },
-  "substances": { "shorthand": { "J": "joint", "Z": "cigarette" } }
+  "plans": ["plans/training.json"],
+  "privacy": {"storage": "local", "agent_reads": "summaries-preferred", "store_photos": false},
+  "checkin": {"channels": ["desktop"]},
+  "devices": {"phone": "android", "bathroom_scale": true, "kitchen_scale": false, "tape": true, "bp_monitor": true, "wearable": "running-watch", "sync": "manual-export"},
+  "nutrition": {"show_numbers": true, "sources": ["bls"], "targets": {"protein_g": 140, "kcal": [2100, 2400]}},
+  "household": {"members": 1, "portions_default": 1, "shared_notes": []},
+  "kitchen": {"devices": ["stove", "oven"], "platforms": []},
+  "pantry": {"mode": "auto", "store_prices": true, "grace_days": {"best_before": 7, "none": 2}},
+  "cooking": {"options": 4, "max_minutes_weekday": 30},
+  "reviews": {"weekly": "sunday-evening", "monthly": "first-sunday", "reminders": "user-phone"},
+  "substances": {
+    "shorthand": {"J": "joint", "Z": "cigarette"},
+    "plan_b": {"window_days": 14, "phase_id": "tobacco-step-1", "threshold_pct_of_baseline": 90}
+  },
+  "phases": [
+    {"id": "baseline", "name": "Baseline", "from": "2026-09-30", "to": "2026-10-06", "focus": "Log everything, change nothing"},
+    {"id": "tobacco-step-1", "name": "Tobacco step 1", "from": "2026-10-07", "to": "2026-11-03", "focus": "Skip the evening cigarette; walk instead", "targets": {"tobacco_per_day": 4}},
+    {"id": "tobacco-step-2", "name": "Tobacco step 2", "from": "2026-11-04", "to": "2026-12-01", "focus": "No cigarette after meals"}
+  ],
+  "decisions": [
+    {"date": "2026-10-06", "title": "Start tobacco step 1", "status": "done", "note": "baseline mean 5.6/day"},
+    {"date": "2026-10-20", "title": "Plan B check for step 1", "status": "open", "note": "switch to plan B if ≥ 90 % of baseline after 14 days"},
+    {"date": "2026-11-03", "title": "Go to step 2?", "status": "open"}
+  ],
+  "goals": {"weight_rate_kg_month": [-2.0, -0.5], "protein_g_per_kg": [1.6, 2.0]},
+  "training": {"sessions_per_week": 4, "schedule": {"mon": "strength", "tue": "endurance", "thu": "strength", "sat|sun": "endurance"}},
+  "measurements": {"waist_cm": "weekly:tue", "circumferences": "monthly:first-sun", "bp": "2x-week"},
+  "checklist": ["weight", "sleep", "meals>=2", "checkin"],
+  "costs": {"currency": "EUR", "tobacco_eur_per_g": 0.35, "tobacco_g_per_use": 0.8, "cannabis_eur_per_g": 10.0, "cannabis_g_per_use": 0.3, "alcohol_eur_per_unit": 1.5, "coffee_eur_per_cup_home": 0.25}
 }

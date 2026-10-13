@@ -12,37 +12,39 @@
 </head>
 <body>
 <header class="top">
-  <div class="wrap">
+  <div class="wrap top-row">
     <div class="brand">
       <div class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>
       </div>
-      <div>
+      <div class="brand-text">
         <h1 class="wordmark">body-os</h1>
         <p class="subtitle" id="subtitle">&nbsp;</p>
       </div>
     </div>
-    <div class="controls">
-      <div class="segmented" role="group" id="period" aria-label="Period">
-        <button type="button" data-days="14">14</button>
-        <button type="button" data-days="30">30</button>
-        <button type="button" data-days="90">90</button>
-        <button type="button" data-days="all">All</button>
-      </div>
-      <button type="button" class="icon-btn" id="theme" aria-label="Toggle theme"></button>
+    <div class="controls tools-top">
       <span class="privacy" id="privacy">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
         <span id="privacy-text">local only</span>
       </span>
+      <div class="segmented period" role="group" aria-label="Period">
+        <button type="button" data-days="14">14</button><button type="button" data-days="30">30</button><button type="button" data-days="90">90</button><button type="button" data-days="all">All</button>
+      </div>
+      <button type="button" class="icon-btn theme-btn" aria-label="Toggle theme"></button>
     </div>
   </div>
 </header>
+<div class="tabbar">
+  <div class="wrap tabbar-row">
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
+  </div>
+</div>
 <main class="wrap" id="main">
-  <section class="kpis" id="kpis" aria-label="Key figures"></section>
-  <div id="sections"></div>
+  <div id="panels"></div>
   <footer class="foot" id="foot"></footer>
 </main>
 <script src="vendor/echarts.min.js"></script>
+<script src="markdown.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

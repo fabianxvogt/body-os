@@ -299,6 +299,7 @@ def validate_log_event(ev):
     if not isinstance(ev, dict):
         return ["event is not a JSON object"]
     _check_common(ev, LOG_TYPES, errs)
+    _check_num(ev, "price_eur", errs, 0, 100000)
     t = ev.get("type")
     if t == "weight":
         _check_num(ev, "kg", errs, 20, 400, required=True)
@@ -724,6 +725,7 @@ def pantry_state(ctx, events=None):
         st = items.get(ev.get("item_id"))
         if st is None:
             continue
+        was_gone = st["gone"]
         if t == "consume":
             if is_num(ev.get("qty")) and is_num(st.get("remaining")):
                 st["remaining"] = max(0, round(st["remaining"] - ev["qty"], 3))
@@ -750,6 +752,10 @@ def pantry_state(ctx, events=None):
             if ev.get("expires"):
                 st["expires"] = ev["expires"]
                 st["expires_est"] = True
+        if st["gone"] and not was_gone:
+            st["gone_at"] = (ev.get("ts") or "")[:10]
+        elif not st["gone"]:
+            st.pop("gone_at", None)
     out = []
     for st in items.values():
         st["status"], st["days_left"] = item_status(ctx, st)
@@ -1293,14 +1299,25 @@ def cmd_dash(ctx, args):
 
 DASHBOARD_DIR = os.path.join(ROOT, "tools", "dashboard")
 DASHBOARD_PERIODS = ("14", "30", "90", "all")
+DASHBOARD_TABS = ("today", "body", "nutrition", "kitchen", "sleep", "substances", "training", "journal")
 DASHBOARD_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                    ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
                    ".ico": "image/x-icon", ".woff2": "font/woff2"}
 DASHBOARD_CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
                  "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 DASHBOARD_PANTRY_FIELDS = ("item_id", "name", "status", "days_left", "expires", "date_kind", "check_hint",
-                           "storage", "remaining", "unit", "opened", "expires_est")
+                           "storage", "remaining", "unit", "opened", "expires_est", "category")
 DASHBOARD_TRAINING_PLAN = 4
+DASHBOARD_CHECKLIST = ("weight", "sleep", "meals>=2", "checkin")
+DASHBOARD_TEXT_MAX = 512 * 1024
+REVIEW_FILE_RE = re.compile(r"^\d{4}-(W\d{2}|\d{2})\.md$")
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+ENDURANCE_KINDS = ("run", "bike")
+CIRCUMFERENCES = ("waist_cm", "arm_cm", "chest_cm", "thigh_cm")
+VITALS = ("resting_hr", "hrv_ms", "vo2max")
+MEASURE_GROUPS = {"circumferences": ("waist_cm", "arm_cm", "chest_cm", "thigh_cm", "hip_cm", "neck_cm")}
+CHECK_ALIASES = {"meals": "meal", "checkins": "checkin", "weights": "weight", "drinks": "drink",
+                 "trainings": "training", "notes": "note"}
 
 
 def _r(v, nd=2):
@@ -1318,6 +1335,327 @@ def _epley(kg, reps):
     return kg if reps == 1 else kg * (1 + reps / 30.0)
 
 
+def _dict(v):
+    return v if isinstance(v, dict) else {}
+
+
+def _list(v):
+    return v if isinstance(v, list) else []
+
+
+def _day_or_none(s):
+    try:
+        return parse_date(s)
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
+def _minutes(t):
+    return t.hour * 60 + t.minute
+
+
+def _hm_of(minutes):
+    minutes = int(round(minutes)) % 1440
+    return "%02d:%02d" % (minutes // 60, minutes % 60)
+
+
+def _band(v):
+    """Number or [lo, hi] -> [lo, hi|None]; anything else -> None."""
+    if is_num(v):
+        return [v, None]
+    if isinstance(v, list) and v and is_num(v[0]):
+        return [v[0], v[1] if len(v) > 1 and is_num(v[1]) else None]
+    return None
+
+
+def _read_text(path):
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > DASHBOARD_TEXT_MAX:
+            return None
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def training_category(kind):
+    return "strength" if kind == "strength" else "endurance" if kind in ENDURANCE_KINDS else "other"
+
+
+def settings_phases(settings):
+    """Valid phases from settings, sorted by start: {id, name, from, to (date|None), focus, targets}."""
+    out = []
+    for p in _list(settings.get("phases")):
+        frm = _day_or_none(_dict(p).get("from"))
+        if not frm:
+            continue
+        name = p.get("name") or p.get("id") or frm.isoformat()
+        out.append({"id": str(p.get("id") or slug(name)), "name": str(name), "from": frm,
+                    "to": _day_or_none(p.get("to")), "focus": p.get("focus"), "targets": _dict(p.get("targets"))})
+    out.sort(key=lambda p: p["from"])
+    return out
+
+
+def current_phase(phases, day):
+    cur = [p for p in phases if p["from"] <= day and (p["to"] is None or day <= p["to"])]
+    return cur[-1] if cur else None
+
+
+def phase_json(p, today):
+    if not p:
+        return None
+    return {"id": p["id"], "name": p["name"], "from": p["from"].isoformat(),
+            "to": p["to"].isoformat() if p["to"] else None, "focus": p["focus"], "targets": p["targets"],
+            "day": (today - p["from"]).days + 1, "of": (p["to"] - p["from"]).days + 1 if p["to"] else None}
+
+
+def settings_decisions(settings, today):
+    out = []
+    for d in _list(settings.get("decisions")):
+        if not _dict(d).get("title"):
+            continue
+        day = _day_or_none(d.get("date"))
+        out.append({"date": day.isoformat() if day else None, "title": str(d["title"]),
+                    "status": "done" if d.get("status") == "done" else "open", "note": d.get("note"),
+                    "days_left": (day - today).days if day else None})
+    out.sort(key=lambda d: (d["date"] is None, d["date"] or ""))
+    return out
+
+
+def next_decision(decisions):
+    open_ = [d for d in decisions if d["status"] == "open"]
+    upcoming = [d for d in open_ if d["days_left"] is not None and d["days_left"] >= 0]
+    return (upcoming or open_ or [None])[0]
+
+
+def review_files(me):
+    """Review markdown files in me/reviews/ matching the whitelist, newest period first."""
+    rdir = os.path.realpath(os.path.join(me, "reviews"))
+    try:
+        names = [n for n in os.listdir(rdir) if REVIEW_FILE_RE.match(n)
+                 and os.path.dirname(os.path.realpath(os.path.join(rdir, n))) == rdir
+                 and os.path.isfile(os.path.join(rdir, n))]
+    except OSError:
+        return []
+
+    def end(n):
+        y, rest = int(n[:4]), n[5:-3]
+        try:
+            if rest.startswith("W"):
+                return dt.date.fromisocalendar(y, int(rest[1:]), 7)
+            m = int(rest)
+            return dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1)
+        except ValueError:
+            return dt.date(y, 1, 1)
+    return sorted(names, key=lambda n: (end(n), n), reverse=True)
+
+
+def review_text(me, name):
+    """Markdown of me/reviews/<name>, or None. Only whitelisted names; no traversal, no symlink escape."""
+    if not isinstance(name, str) or not REVIEW_FILE_RE.match(name):
+        return None
+    rdir = os.path.realpath(os.path.join(me, "reviews"))
+    full = os.path.realpath(os.path.join(rdir, name))
+    if os.path.dirname(full) != rdir:
+        return None
+    return _read_text(full)
+
+
+def review_title(text, name):
+    for line in (text or "").splitlines():
+        m = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if m:
+            return m.group(1)
+    return name[:-3]
+
+
+def extract_focus(text):
+    """First list item or paragraph under a heading containing 'Fokus'/'Focus'; else a 'Focus: …' line."""
+    lines = (text or "").splitlines()
+    inside, para = False, []
+    for line in lines:
+        s = line.strip()
+        if s.startswith("#"):
+            if inside:
+                break
+            inside = bool(re.search(r"fokus|focus", s, re.I))
+            continue
+        if not inside:
+            continue
+        if not s:
+            if para:
+                break
+            continue
+        m = re.match(r"^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$", s)
+        if m and not para:
+            return m.group(1).strip() or None
+        para.append(s)
+    if para:
+        return " ".join(para)
+    for line in lines:
+        m = re.match(r"^\s*(?:[-*+]\s+)?(?:\*\*|__)?[^:\n]*(?:fokus|focus)[^:\n]*?:\s*(?:\*\*|__)?\s*(.+)$", line, re.I)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+    return None
+
+
+def _measure_due(rule, mdays, today):
+    """Due-state of one measurement rule for today, or None when not scheduled today."""
+    rule = str(rule).strip().lower()
+    monday = today - dt.timedelta(days=today.weekday())
+    m = re.match(r"^weekly:([a-z]{3})", rule)
+    if m:
+        if WEEKDAYS[today.weekday()] != m.group(1):
+            return None
+        if today in mdays:
+            return {"status": "done"}
+        recent = any(today - dt.timedelta(days=6) <= d < today for d in mdays)
+        return {"status": "done" if recent else "due"}
+    m = re.match(r"^monthly:first-([a-z]{3})", rule)
+    if m and m.group(1) in WEEKDAYS:
+        first = today.replace(day=1)
+        first += dt.timedelta(days=(WEEKDAYS.index(m.group(1)) - first.weekday()) % 7)
+        if today != first:
+            return None
+        logged = any((d.year, d.month) == (today.year, today.month) for d in mdays)
+        return {"status": "done" if logged else "due"}
+    m = re.match(r"^(\d+)x-week$", rule)
+    if m:
+        n, count = int(m.group(1)), sum(1 for d in mdays if monday <= d <= today)
+        return {"status": "done" if count >= n else "open", "count": count, "of": n}
+    return None
+
+
+def _training_matches(ev, what):
+    what = str(what).lower()
+    return what in (ev.get("kind"), training_category(ev.get("kind")), str(ev.get("plan") or "").lower())
+
+
+def training_due(settings, sessions_by_day, today):
+    """Scheduled training for today ('sat|sun' = either day) and whether it is done; plus the next one."""
+    sched = _dict(_dict(settings.get("training")).get("schedule"))
+    monday = today - dt.timedelta(days=today.weekday())
+    due, upcoming = [], []
+    for key, what in sched.items():
+        days = [x.strip().lower()[:3] for x in str(key).split("|") if x.strip().lower()[:3] in WEEKDAYS]
+        if not days:
+            continue
+        idx = [WEEKDAYS.index(x) for x in days]
+        if today.weekday() in idx:
+            done = None
+            for i in idx:
+                d = monday + dt.timedelta(days=i)
+                if d <= today and any(_training_matches(e, what) for e in sessions_by_day.get(d, [])):
+                    done = d
+            due.append({"what": str(what), "days": str(key), "done": done is not None,
+                        "done_day": done.isoformat() if done else None})
+        for off in range(1, 8):
+            d = today + dt.timedelta(days=off)
+            if d.weekday() in idx:
+                upcoming.append((d, str(what)))
+                break
+    upcoming.sort()
+    nxt = {"day": upcoming[0][0].isoformat(), "what": upcoming[0][1]} if upcoming else None
+    return due, nxt
+
+
+COST_CATEGORIES = ("groceries", "out", "tobacco", "cannabis", "alcohol", "coffee")
+COST_KEYS = ("tobacco_eur_per_g", "tobacco_g_per_use", "cannabis_eur_per_g", "cannabis_g_per_use",
+             "alcohol_eur_per_unit", "coffee_eur_per_cup_home")
+CANNABIS_KINDS = ("joint", "cannabis_vape")
+
+
+def cost_settings(settings):
+    """settings.costs with every known key present (None = not set)."""
+    c = _dict(_dict(settings).get("costs"))
+    out = {k: c[k] if is_num(c.get(k)) and c[k] >= 0 else None for k in COST_KEYS}
+    out["currency"] = c["currency"] if isinstance(c.get("currency"), str) and c["currency"] else "EUR"
+    return out
+
+
+def event_costs(ev, cs):
+    """Cost parts of one log event: [(category, eur or None if unknown, estimated)].
+
+    meal/drink `price_eur` = paid (eaten out, on the go); home-cooked meals cost nothing here (groceries
+    are counted at purchase). Substances: `price_eur` wins, else estimated from settings.costs."""
+    t, price = ev.get("type"), ev.get("price_eur") if is_num(ev.get("price_eur")) else None
+    if t == "meal":
+        return [("out", price, False)] if price is not None else []
+    if t == "drink":
+        units = ev.get("alcohol_units") if is_num(ev.get("alcohol_units")) else 0
+        cat = "alcohol" if ev.get("kind") == "alcohol" or units > 0 else "coffee" if ev.get("kind") == "coffee" else "out"
+        if price is not None:
+            return [(cat, price, False)]
+        if cat == "alcohol" and units > 0:
+            p = cs["alcohol_eur_per_unit"]
+            return [("alcohol", units * p if p is not None else None, True)]
+        if cat == "coffee":
+            return [("coffee", cs["coffee_eur_per_cup_home"], True)]
+        return []
+    if t != "substance":
+        return []
+    kind, n = ev.get("kind"), ev.get("count") if is_int(ev.get("count")) and ev["count"] > 0 else 1
+    g = ev.get("g") if is_num(ev.get("g")) else None
+    if price is not None:
+        cannabis = kind in CANNABIS_KINDS or (kind == "other" and not ev.get("tobacco"))
+        return [("cannabis" if cannabis else "tobacco", price, False)]
+    parts = []
+
+    def est(cat, grams):
+        p = cs[cat + "_eur_per_g"]
+        parts.append((cat, grams * p if grams is not None and p is not None else None, True))
+    tob_use = cs["tobacco_g_per_use"] * n if cs["tobacco_g_per_use"] is not None else None
+    can_use = cs["cannabis_g_per_use"] * n if cs["cannabis_g_per_use"] is not None else None
+    if kind == "cigarette":
+        est("tobacco", g if g is not None else tob_use)
+    elif kind == "joint":
+        if ev.get("tobacco"):
+            est("tobacco", tob_use)
+        est("cannabis", g if g is not None else can_use)
+    elif kind == "cannabis_vape":
+        est("cannabis", g if g is not None else can_use)
+    return parts
+
+
+def cost_days(ctx, events, pevents, cs):
+    """{date: {category: {"eur", "est", "unknown"}}} over all history (log events + pantry purchases)."""
+    out = collections.defaultdict(dict)
+
+    def add(day, cat, eur, est):
+        c = out[day].setdefault(cat, {"eur": 0.0, "est": False, "unknown": 0})
+        if eur is None:
+            c["unknown"] += 1
+        else:
+            c["eur"] += eur
+            c["est"] = c["est"] or est
+    for e in events:
+        for cat, eur, est in event_costs(e, cs):
+            add(event_day(e), cat, eur, est)
+    for e in pevents:
+        d = _day_or_none(e.get("ts")) if e.get("type") == "purchase" else None
+        for it in _list(e.get("items")) if d else []:
+            if isinstance(it, dict):
+                add(d, "groceries", it["price_eur"] if is_num(it.get("price_eur")) else None, False)
+    return out
+
+
+def cost_sum(cdays, days_, cats=COST_CATEGORIES):
+    """Per-category totals over days: {cat: {"eur", "est", "unknown", "any"}}."""
+    tot = {c: {"eur": 0.0, "est": False, "unknown": 0, "any": False} for c in cats}
+    for d in days_:
+        for c, v in cdays.get(d, {}).items():
+            if c in tot:
+                t = tot[c]
+                t["eur"] += v["eur"]
+                t["est"] = t["est"] or v["est"]
+                t["unknown"] += v["unknown"]
+                t["any"] = True
+    for t in tot.values():
+        t["eur"] = _r(t["eur"])
+    return tot
+
+
+
 def _period_counts(events, days):
     """Substance/tobacco totals and logged-day count for a list of days (for period deltas)."""
     daily = daily_aggregates(events, days)
@@ -1331,22 +1669,36 @@ def _period_counts(events, days):
             "sleep_h": _r(_mean([r["sleep_h"] for r in rows]))}
 
 
+def _mean_n(xs):
+    xs = [x for x in xs if is_num(x)]
+    return {"mean": _r(statistics.mean(xs)) if xs else None, "n": len(xs)}
+
+
 def dashboard_data(ctx, days="30"):
-    """JSON-ready dict for the local dashboard. days: 14/30/90 or 'all' (str or int)."""
+    """JSON-ready dict for the local dashboard, grouped by tab. days: 14/30/90 or 'all' (str or int).
+
+    Shared per-day rows live in `days`; everything a single tab needs lives in `tabs.<tab>`."""
     key = str(days)
     if key not in DASHBOARD_PERIODS:
         raise BosError("days must be one of %s" % "/".join(DASHBOARD_PERIODS))
     settings = ctx.settings if isinstance(ctx.settings, dict) else {}
-    events = [e for e in ctx.log_events() if event_day(e) is not None]
     to = ctx.today
+    events = [e for e in ctx.log_events() if event_day(e) is not None and event_day(e) <= to]
     if key == "all":
-        seen = [event_day(e) for e in events if event_day(e) <= to]
+        seen = [event_day(e) for e in events]
         frm = min(seen) if seen else to - dt.timedelta(days=13)
     else:
         frm = to - dt.timedelta(days=int(key) - 1)
     days_ = [frm + dt.timedelta(days=i) for i in range((to - frm).days + 1)]
     wanted = set(days_)
+    by_day = collections.defaultdict(lambda: collections.defaultdict(list))
+    for e in events:
+        by_day[event_day(e)][e.get("type")].append(e)
+    all_days = sorted(by_day)
     daily = daily_aggregates(events, days_)
+    phases = settings_phases(settings)
+    phase_now = current_phase(phases, to)
+    modules = [m for m in _list(settings.get("modules")) if isinstance(m, str)]
 
     weights = collections.defaultdict(list)  # same rule as weight_trend(), computed once
     for e in events:
@@ -1357,78 +1709,465 @@ def dashboard_data(ctx, days="30"):
         ws = [w for i in range(7) for w in weights.get(d - dt.timedelta(days=i), [])]
         return statistics.mean(ws) if ws else None
 
+    def tobacco_of(d):
+        return sum(e.get("count") or 1 for e in by_day.get(d, {}).get("substance", []) if e.get("tobacco"))
+
+    def is_logged(d):
+        return d in by_day and any(by_day[d].values())
+
+    # ---------------------------------------------------------------- shared per-day rows
     day_rows, trig_period, kinds = [], collections.Counter(), collections.Counter()
     for d in days_:
         r = daily[d]
+        g = r["_events"]
         trig = collections.Counter()
-        for e in r["_events"]["substance"]:
+        for e in g["substance"]:
             trig[e.get("trigger") or "?"] += e.get("count") or 1
         trig_period.update(trig)
         kinds.update(r["substances"])
+        subs = sorted(g["substance"], key=lambda e: e["ts"])
         day_rows.append({
-            "day": d.isoformat(), "logged": any(r["_events"].values()),
+            "day": d.isoformat(), "logged": any(g.values()),
             "weight_kg": r["weight_kg"], "weight_7d": _r(trend(d), 3),
             "sleep_h": _r(r["sleep_h"]), "sleep_quality": _r(r["sleep_quality"]), "wakeups": r["wakeups"],
-            "kcal": _r(r["kcal"], 1), "protein_g": _r(r["protein_g"], 1), "water_ml": r["water_ml"],
-            "caffeine_n": r["caffeine_n"], "last_caffeine": r["last_caffeine"],
+            "meals": r["meals"], "meals_missing_kcal": r["meals_missing_kcal"],
+            "kcal": _r(r["kcal"], 1), "protein_g": _r(r["protein_g"], 1),
+            "carbs_g": _r(_sum_known([e.get("carbs_g") for e in g["meal"]]), 1),
+            "fat_g": _r(_sum_known([e.get("fat_g") for e in g["meal"]]), 1),
+            "water_ml": r["water_ml"], "caffeine_n": r["caffeine_n"], "last_caffeine": r["last_caffeine"],
             "alcohol_units": _r(r["alcohol_units"]), "substance_n": r["substance_n"], "tobacco_n": r["tobacco_n"],
-            "triggers": dict(trig.most_common()), "last_substance": r["last_substance"],
-            "training_n": r["training_n"], "training_min": r["training_min"],
+            "triggers": dict(trig.most_common()), "first_substance": hhmm(subs[0]["ts"]) if subs else None,
+            "last_substance": r["last_substance"], "training_n": r["training_n"], "training_min": r["training_min"],
             "energy": _r(r["energy"]), "mood": _r(r["mood"]), "stress": _r(r["stress"]),
         })
 
-    # Trigger colour slots follow all-time frequency so they stay put when the period changes.
-    trig_all = collections.Counter()
+    previous = None
+    if key != "all":
+        n = len(days_)
+        previous = _period_counts(events, [frm - dt.timedelta(days=n - i) for i in range(n)])
+
+    # ---------------------------------------------------------------- measures (all history, sorted)
+    by_metric = collections.defaultdict(list)
+    for e in sorted((e for e in events if e.get("type") == "measure"), key=_sort_key_ts):
+        m, day = e.get("metric"), event_day(e).isoformat()
+        if m == "bp" and is_num(e.get("sys")) and is_num(e.get("dia")):
+            by_metric["bp"].append({"day": day, "sys": e["sys"], "dia": e["dia"], "pulse": e.get("pulse"),
+                                    "category": bp_category(e["sys"], e["dia"])})
+        elif isinstance(m, str) and is_num(e.get("value")):
+            by_metric[m].append({"day": day, "value": e["value"], "unit": e.get("unit")})
+
+    def series(metric):
+        pts = [p for p in by_metric.get(metric, []) if dt.date.fromisoformat(p["day"]) in wanted]
+        last = collections.OrderedDict((p["day"], p) for p in pts)  # one point per day (latest)
+        allp = by_metric.get(metric, [])
+        return {"points": list(last.values()), "latest": allp[-1] if allp else None,
+                "previous": allp[-2] if len(allp) > 1 else None}
+
+    cs = cost_settings(settings)
+    pevents = load_events(ctx.pantry_path)
+    cdays = cost_days(ctx, events, pevents, cs)
+
+    # ---------------------------------------------------------------- today
+    t = daily_aggregates(events, [to])[to]
+    tg = t["_events"]
+    checklist = []
+    for item in _list(settings.get("checklist")) or list(DASHBOARD_CHECKLIST):
+        m = re.match(r"^\s*([a-z_]+)\s*(?:>=\s*(\d+))?\s*$", str(item))
+        if not m:
+            continue
+        typ = CHECK_ALIASES.get(m.group(1), m.group(1))
+        if typ not in LOG_TYPES:
+            continue
+        need, n = int(m.group(2) or 1), len(tg[typ])
+        value = None
+        if typ == "weight" and n:
+            value = t["weight_kg"]
+        elif typ == "sleep" and t["sleep_h"] is not None:
+            value = _r(t["sleep_h"], 1)
+        checklist.append({"key": m.group(1), "type": typ, "min": need, "n": n, "done": n >= need, "value": value})
+    subs_today = None
+    if "substances" in modules or any(e.get("type") == "substance" for e in events):
+        subs_today = {"n": t["substance_n"], "tobacco_n": t["tobacco_n"], "last": t["last_substance"]}
+
+    sessions_by_day = {d: by_day[d]["training"] for d in all_days if by_day[d]["training"]}
+    train_due, train_next = training_due(settings, sessions_by_day, to)
+    measure_due = []
+    for metric, rule in _dict(settings.get("measurements")).items():
+        names = MEASURE_GROUPS.get(metric, (metric,))
+        mdays = {dt.date.fromisoformat(p["day"]) for nm in names for p in by_metric.get(nm, [])}
+        st = _measure_due(rule, mdays, to)
+        if st:
+            measure_due.append(dict(st, metric=metric, rule=str(rule),
+                                    last=max(mdays).isoformat() if mdays else None))
+    reviews = review_files(ctx.me)
+    review_due = None
+    rv_day = str(_dict(settings.get("reviews")).get("weekly") or "").lower()[:3]
+    if rv_day in WEEKDAYS and WEEKDAYS[to.weekday()] == rv_day:
+        y, w, _ = to.isocalendar()
+        fname = "%04d-W%02d.md" % (y, w)
+        review_due = {"file": fname, "done": fname in reviews}
+    weekly = [n for n in reviews if "-W" in n]
+    focus = None
+    if weekly:
+        txt = extract_focus(review_text(ctx.me, weekly[0]))
+        if txt:
+            focus = {"file": weekly[0], "text": txt}
+
+    pstate = pantry_state(ctx)
+    pantry = [dict({k: s.get(k) for k in DASHBOARD_PANTRY_FIELDS}, purchased=s.get("purchased"))
+              for s in pstate if s["status"] != "gone"]
+    alerts = [p for p in pantry if p["status"] in ("soon", "check", "discard")]
+
+    monday = to - dt.timedelta(days=to.weekday())
+    week_days = [monday + dt.timedelta(days=i) for i in range(to.weekday() + 1)]
+    week_agg = daily_aggregates(events, week_days)
+    training = _dict(settings.get("training"))
+    plan = training.get("sessions_per_week")
+    plan = plan if is_int(plan) and plan > 0 else DASHBOARD_TRAINING_PLAN
+    decisions = settings_decisions(settings, to)
+
+    month_days = [to.replace(day=1) + dt.timedelta(days=i) for i in range(to.day)]
+    msum = cost_sum(cdays, month_days)
+    spend_month = {"month": to.strftime("%Y-%m"), "from": month_days[0].isoformat(), "to": to.isoformat(),
+                   "currency": cs["currency"], "total": _r(sum(v["eur"] for v in msum.values())),
+                   "estimated": any(v["est"] for v in msum.values()),
+                   "unknown": sum(v["unknown"] for v in msum.values()),
+                   "categories": [dict(key=c, eur=v["eur"], est=v["est"], unknown=v["unknown"], any=v["any"])
+                                  for c, v in msum.items()]}
+    tab_today = {
+        "phase": phase_json(phase_now, to), "next_decision": next_decision(decisions),
+        "checklist": checklist, "substances": subs_today,
+        "due": {"training": train_due, "training_next": train_next, "measurements": measure_due,
+                "review": review_due},
+        "pantry_alerts": {"counts": {s: sum(1 for p in pantry if p["status"] == s) for s in ("soon", "check", "discard")},
+                          "top": alerts[:3]},
+        "week": {"from": monday.isoformat(), "training_n": sum(week_agg[d]["training_n"] for d in week_days),
+                 "training_min": sum(week_agg[d]["training_min"] for d in week_days)},
+        "training_plan": plan, "focus": focus,
+        "spend_month": spend_month,
+    }
+
+    # ---------------------------------------------------------------- body
+    goals = _dict(settings.get("goals"))
+    rate = goals.get("weight_rate_kg_month")
+    corridor = None
+    if isinstance(rate, list) and len(rate) == 2 and all(is_num(x) for x in rate):
+        wlist = sorted((event_day(e), e["kg"]) for e in events if e.get("type") == "weight" and is_num(e.get("kg")))
+        anchor_phase = phase_now or (phases[0] if phases else None)
+        cands = [w for w in wlist if anchor_phase and w[0] >= anchor_phase["from"]] or wlist
+        if cands:
+            a_day, a_kg = cands[0]
+            lo, hi = min(rate), max(rate)
+            corridor = {"anchor_day": a_day.isoformat(), "anchor_kg": a_kg, "rate": [lo, hi],
+                        "phase_id": anchor_phase["id"] if anchor_phase and cands[0][0] >= anchor_phase["from"] else None,
+                        "days": [{"day": d.isoformat(), "lo": _r(a_kg + lo * (d - a_day).days / 30.4375),
+                                  "hi": _r(a_kg + hi * (d - a_day).days / 30.4375)} for d in days_ if d >= a_day]}
+    labs = collections.defaultdict(list)
     for e in events:
-        if e.get("type") == "substance":
-            trig_all[e.get("trigger") or "?"] += e.get("count") or 1
-    trigger_order = [t for t, _ in sorted(trig_all.items(), key=lambda kv: (-kv[1], kv[0]))]
+        if e.get("type") == "lab" and e.get("test"):
+            labs[str(e["test"])].append(e)
+    lab_rows = []
+    for test, evs in sorted(labs.items()):
+        evs.sort(key=lambda e: (str(e.get("lab_date") or e["ts"][:10]), e["ts"]))
+        cur, prev = evs[-1], evs[-2] if len(evs) > 1 else None
+        v, lo, hi = cur.get("value"), cur.get("ref_low"), cur.get("ref_high")
+        flag = None
+        if is_num(v) and (is_num(lo) or is_num(hi)):
+            flag = "low" if is_num(lo) and v < lo else "high" if is_num(hi) and v > hi else "in"
+        lab_rows.append({"test": test, "value": v, "unit": cur.get("unit"), "ref_low": lo, "ref_high": hi,
+                         "flag": flag, "date": str(cur.get("lab_date") or cur["ts"][:10]),
+                         "previous": prev.get("value") if prev else None,
+                         "previous_date": str(prev.get("lab_date") or prev["ts"][:10]) if prev else None})
+    tab_body = {
+        "corridor": corridor, "goals": {"weight_rate_kg_month": rate if corridor else None},
+        "circumferences": {m: series(m) for m in CIRCUMFERENCES},
+        "bp": series("bp"), "vitals": {m: series(m) for m in VITALS if by_metric.get(m)},
+        "labs": lab_rows,
+    }
 
-    subs = sorted(((_local_dt(e["ts"]), e) for e in events if e.get("type") == "substance"),
-                  key=lambda p: p[0])
-    use_times = collections.Counter()
-    for t, e in subs:
-        if t.date() in wanted:
-            use_times[(t.weekday(), t.hour)] += e.get("count") or 1
+    # ---------------------------------------------------------------- nutrition
+    nutrition = _dict(settings.get("nutrition"))
+    ntargets = _dict(nutrition.get("targets"))
+    protein_t, protein_basis = None, None
+    per_kg = goals.get("protein_g_per_kg")
+    ref_w = None
+    for d in reversed([d for d in all_days if d in weights]):
+        ref_w = trend(d)
+        break
+    if isinstance(per_kg, list) and len(per_kg) == 2 and all(is_num(x) for x in per_kg) and ref_w:
+        protein_t = [round(min(per_kg) * ref_w), round(max(per_kg) * ref_w)]
+        protein_basis = {"g_per_kg": [min(per_kg), max(per_kg)], "weight_kg": _r(ref_w, 1)}
+    else:
+        protein_t = _band(ntargets.get("protein_g")) or (
+            [ntargets["protein_g_min"], ntargets.get("protein_g_max") if is_num(ntargets.get("protein_g_max")) else None]
+            if is_num(ntargets.get("protein_g_min")) else None)
+    kcal_t = _band(ntargets.get("kcal")) or (
+        [ntargets["kcal_min"], ntargets.get("kcal_max") if is_num(ntargets.get("kcal_max")) else None]
+        if is_num(ntargets.get("kcal_min")) else None)
+    slots, meal_times, sources = [], [], collections.OrderedDict()
+    mac = {"protein_g": 0.0, "carbs_g": 0.0, "fat_g": 0.0}
+    mac_meals, item_protein_n = 0, 0
+    for d in days_:
+        row = {"day": d.isoformat()}
+        for e in sorted(daily[d]["_events"]["meal"], key=lambda e: e["ts"]):
+            slot = e.get("slot") if e.get("slot") in MEAL_SLOTS else "other"
+            if is_num(e.get("protein_g")):
+                row[slot] = row.get(slot, 0) + e["protein_g"]
+            t_ = _local_dt(e["ts"])
+            meal_times.append({"day": d.isoformat(), "time": t_.strftime("%H:%M"), "minutes": _minutes(t_),
+                               "slot": slot, "desc": e.get("desc"), "kcal": e.get("kcal"),
+                               "protein_g": e.get("protein_g")})
+            if all(is_num(e.get(k)) for k in mac):
+                mac_meals += 1
+                for k in mac:
+                    mac[k] += e[k]
+            for it in _list(e.get("items")):
+                if isinstance(it, dict) and it.get("name") and is_num(it.get("protein_g")):
+                    item_protein_n += 1
+                    nm = str(it["name"]).strip()
+                    s = sources.setdefault(norm_name(nm) or nm, {"name": nm, "protein_g": 0.0, "n": 0})
+                    s["protein_g"] += it["protein_g"]
+                    s["n"] += 1
+        slots.append(row)
+    meal_days = sum(1 for r in day_rows if r["meals"])
+    kcal_parts = {"protein_g": mac["protein_g"] * 4, "carbs_g": mac["carbs_g"] * 4, "fat_g": mac["fat_g"] * 9}
+    ksum = sum(kcal_parts.values())
+    tab_nutrition = {
+        "targets": {"protein_g": protein_t, "protein_basis": protein_basis, "kcal": kcal_t},
+        "slots": slots, "meal_times": meal_times,
+        "macros": {"meals": mac_meals, "days": meal_days,
+                   "g_per_day": {k: _r(v / meal_days, 1) if meal_days else None for k, v in mac.items()},
+                   "kcal_pct": {k: _r(v / ksum * 100, 1) if ksum else None for k, v in kcal_parts.items()}},
+        "protein_sources": sorted(({"name": s["name"], "protein_g": _r(s["protein_g"], 1), "n": s["n"]}
+                                   for s in sources.values()), key=lambda s: -s["protein_g"])[:8],
+        "items_with_protein": item_protein_n,
+    }
 
-    sleep_vs = []
+    # ---------------------------------------------------------------- kitchen
+    purchases = []
+    for e in sorted((e for e in pevents if e.get("type") == "purchase"), key=_sort_key_ts):
+        d = _day_or_none(e.get("ts"))
+        if d is None or d not in wanted:
+            continue
+        items = [it for it in _list(e.get("items")) if isinstance(it, dict)]
+        prices = [it["price_eur"] for it in items if is_num(it.get("price_eur"))]
+        purchases.append({"day": d.isoformat(), "store": e.get("store") or None, "items": len(items),
+                          "priced_items": len(prices), "total_eur": _r(sum(prices)) if prices else None})
+    waste = []
+    for s in pstate:
+        if not str(s.get("gone_reason") or "").startswith("discarded"):
+            continue
+        frac = s["remaining"] / s["qty"] if is_num(s.get("remaining")) and is_num(s.get("qty")) and s["qty"] > 0 else 1.0
+        frac = max(0.0, min(1.0, frac))
+        waste.append({"day": s.get("gone_at"), "name": s.get("name"), "reason": s["gone_reason"].split(":", 1)[-1],
+                      "fraction": _r(frac), "eur": _r(s["price_eur"] * frac) if is_num(s.get("price_eur")) else None,
+                      "storage": s.get("storage")})
+    waste.sort(key=lambda w: w["day"] or "", reverse=True)
+    recipes = sorted((e for e in load_events(ctx.cookbook_path) if isinstance(e.get("ts"), str)),
+                     key=_sort_key_ts, reverse=True)
+    cuisines, skills, ratings = collections.Counter(), [], {"up": 0, "down": 0, "none": 0}
+    for e in recipes:
+        d = _day_or_none(e["ts"])
+        if e.get("status") != "cooked":
+            continue
+        ratings[e.get("rating") if e.get("rating") in ("up", "down") else "none"] += 1
+        if d and (to - d).days < 30 and d <= to:
+            cuisines[str(e.get("cuisine") or "?")] += 1
+    for e in reversed(recipes):  # oldest first: first time a skill was learned
+        if e.get("status") == "cooked" and e.get("skill") and e["skill"] not in [s["skill"] for s in skills]:
+            skills.append({"skill": str(e["skill"]), "recipe": e.get("name"), "day": e["ts"][:10]})
+    eating_out = []
+    for d in days_:
+        for e in sorted((e for typ in ("meal", "drink") for e in daily[d]["_events"][typ]), key=lambda e: e["ts"]):
+            for cat, eur, _ in event_costs(e, cs):
+                if cat == "out" and eur is not None:
+                    eating_out.append({"day": d.isoformat(), "time": hhmm(e["ts"]), "type": e.get("type"),
+                                       "slot": e.get("slot"), "desc": e.get("desc") or e.get("kind"), "eur": _r(eur)})
+    tab_kitchen = {
+        "pantry": pantry, "purchases": purchases, "waste": waste, "eating_out": eating_out,
+        "currency": cs["currency"],
+        "shopping_list": _read_text(os.path.join(ctx.me, "pantry", "shopping-list.md")),
+        "cookbook": [{"day": e["ts"][:10], "name": e.get("name"), "cuisine": e.get("cuisine"),
+                      "simplicity": e.get("simplicity"), "nutrition_score": e.get("nutrition_score"),
+                      "rating": e.get("rating"), "status": e.get("status"), "skill": e.get("skill")}
+                     for e in recipes[:10]],
+        "cuisines_30d": dict(sorted(cuisines.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "ratings": ratings, "skills": skills,
+    }
+
+    # ---------------------------------------------------------------- sleep
+    subs = sorted(((_local_dt(e["ts"]), e) for e in events if e.get("type") == "substance"), key=lambda p: p[0])
+    nights, sleep_vs, coffee_vs = [], [], []
+    alc = {"none": [], "some": []}
+    trn = {"rest": [], "training": []}
     for d in days_:
         r = daily[d]
         if r["sleep_h"] is None:
             continue
-        start = dt.datetime.combine(d - dt.timedelta(days=1), dt.time(18, 0))
-        end = dt.datetime.combine(d, dt.time(6, 0))
-        beds = []
+        anchor = dt.datetime.combine(d - dt.timedelta(days=1), dt.time(20, 0))
+        main = None
         for e in r["_events"]["sleep"]:
             try:
-                beds.append(_local_dt(e["bed"]))
+                b, w = _local_dt(e["bed"]), _local_dt(e["wake"])
             except (KeyError, ValueError, TypeError):
-                pass
-        if beds:
-            end = min(end, max(min(beds), start))
+                continue
+            if main is None or (w - b) > (main[1] - main[0]):
+                main = (b, w)
+        if main:
+            nights.append({"day": d.isoformat(), "bed": main[0].strftime("%H:%M"), "wake": main[1].strftime("%H:%M"),
+                           "bed_min": int((main[0] - anchor).total_seconds() // 60),
+                           "wake_min": int((main[1] - anchor).total_seconds() // 60), "sleep_h": _r(r["sleep_h"])})
+        start = dt.datetime.combine(d - dt.timedelta(days=1), dt.time(18, 0))
+        end = dt.datetime.combine(d, dt.time(6, 0))
+        if main:
+            end = min(end, max(main[0], start))
         last = None
-        for t, _ in subs:
-            if start <= t <= end:
-                last = t
+        for t_, _ in subs:
+            if start <= t_ <= end:
+                last = t_
         sleep_vs.append({"day": d.isoformat(), "last_use_prev_evening": last.strftime("%H:%M") if last else None,
                          "minutes_after_18": int((last - start).total_seconds() // 60) if last else None,
                          "sleep_h": _r(r["sleep_h"]), "quality": _r(r["sleep_quality"])})
+        prev = d - dt.timedelta(days=1)
+        pg = by_day.get(prev, {})
+        caf = sorted((e for e in pg.get("drink", []) if is_caffeinated(e)), key=lambda e: e["ts"])
+        if caf:
+            ct = _local_dt(caf[-1]["ts"])
+            coffee_vs.append({"day": d.isoformat(), "last_coffee": ct.strftime("%H:%M"), "minutes": _minutes(ct),
+                              "sleep_h": _r(r["sleep_h"])})
+        if is_logged(prev):
+            units = sum(e.get("alcohol_units") or 0 for e in pg.get("drink", []))
+            alc["some" if units > 0 else "none"].append(r["sleep_h"])
+            trn["training" if pg.get("training") else "rest"].append(r["sleep_h"])
+    bed_mins = [n["bed_min"] for n in nights]
+    tab_sleep = {
+        "nights": nights,
+        "regularity": {"n": len(bed_mins),
+                       "bed_sd_min": _r(statistics.pstdev(bed_mins), 0) if len(bed_mins) >= 3 else None,
+                       "bed_mean": _hm_of(20 * 60 + statistics.mean(bed_mins)) if bed_mins else None,
+                       "wake_mean": _hm_of(20 * 60 + statistics.mean([n["wake_min"] for n in nights])) if nights else None},
+        "vs_last_use": sleep_vs, "vs_coffee": coffee_vs,
+        "vs_alcohol": {k: _mean_n(v) for k, v in alc.items()},
+        "vs_training": {k: _mean_n(v) for k, v in trn.items()},
+    }
 
+    # ---------------------------------------------------------------- substances
+    trig_all = collections.Counter()
+    for e in events:
+        if e.get("type") == "substance":
+            trig_all[e.get("trigger") or "?"] += e.get("count") or 1
+    use_times = collections.Counter()
+    for t_, e in subs:
+        if t_.date() in wanted:
+            use_times[(t_.weekday(), t_.hour)] += e.get("count") or 1
+    sub_cfg = _dict(settings.get("substances"))
+    base_phase = next((p for p in phases if p["id"] == "baseline"), phases[0] if phases else None)
+
+    def rate_between(a, b):
+        ds = [a + dt.timedelta(days=i) for i in range((b - a).days + 1)] if a <= b else []
+        ds = [d for d in ds if is_logged(d)]
+        return (sum(tobacco_of(d) for d in ds) / len(ds), len(ds)) if ds else (None, 0)
+
+    baseline = None
+    if base_phase and base_phase["from"] <= to:
+        b_rate, b_n = rate_between(base_phase["from"], min(base_phase["to"] or to, to))
+        if b_rate is not None:
+            baseline = {"phase_id": base_phase["id"], "name": base_phase["name"],
+                        "from": base_phase["from"].isoformat(),
+                        "to": min(base_phase["to"] or to, to).isoformat(), "per_day": _r(b_rate), "days": b_n}
+    target_now = phase_now["targets"].get("tobacco_per_day") if phase_now else None
+    logged_hist = [d for d in all_days if is_logged(d)]
+    longest = run = 0
+    prev_d = None
+    for d in logged_hist:
+        if tobacco_of(d) == 0:
+            run = run + 1 if prev_d is not None and (d - prev_d).days == 1 and tobacco_of(prev_d) == 0 else 1
+            longest = max(longest, run)
+        prev_d = d
+    current = 0
+    d = to
+    while is_logged(d) and tobacco_of(d) == 0:
+        current += 1
+        d -= dt.timedelta(days=1)
+    pb_cfg = _dict(sub_cfg.get("plan_b"))
+    pb_phase = next((p for p in phases if p["id"] == pb_cfg.get("phase_id")), None)
+    plan_b = None
+    if pb_cfg and pb_phase and pb_phase["from"] <= to and baseline and baseline["per_day"]:
+        window = pb_cfg.get("window_days") if is_int(pb_cfg.get("window_days")) else 14
+        thr = pb_cfg.get("threshold_pct_of_baseline") if is_num(pb_cfg.get("threshold_pct_of_baseline")) else 90
+        day_n = (to - pb_phase["from"]).days + 1
+        last_full = to - dt.timedelta(days=1)
+        lo = max(pb_phase["from"], last_full - dt.timedelta(days=6))
+        cur_rate, cur_n = rate_between(lo, last_full) if last_full >= pb_phase["from"] else rate_between(to, to)
+        pct = cur_rate / baseline["per_day"] * 100 if cur_rate is not None else None
+        if pct is None:
+            status = None
+        elif day_n > window:
+            status = "plan_b_due" if pct >= thr else "on_track"
+        else:
+            status = "watch" if pct >= thr else "on_track"
+        plan_b = {"phase_id": pb_phase["id"], "phase_name": pb_phase["name"], "from": pb_phase["from"].isoformat(),
+                  "day": day_n, "window_days": window, "threshold_pct": thr, "baseline_per_day": baseline["per_day"],
+                  "current_per_day": _r(cur_rate), "current_days": cur_n, "pct_of_baseline": _r(pct, 0),
+                  "status": status}
+    sub_cats = ("tobacco", "cannabis", "alcohol")
+    need = {"tobacco": ("tobacco_eur_per_g", "tobacco_g_per_use"),
+            "cannabis": ("cannabis_eur_per_g", "cannabis_g_per_use"), "alcohol": ("alcohol_eur_per_unit",)}
+    unknown_cats = {c for d in cdays for c, v in cdays[d].items() if c in sub_cats and v["unknown"]}
+    months = collections.OrderedDict()
+    for d in sorted(cdays):
+        months.setdefault(d.strftime("%Y-%m"), []).append(d)
+    cost = {
+        "currency": cs["currency"],
+        "settings": {k: cs[k] for k in COST_KEYS},
+        "missing": sorted({k for c in unknown_cats for k in need[c] if cs[k] is None}),
+        "categories": [c for c in sub_cats if any(c in cdays[d] for d in cdays)],
+        "per_month": [dict(month=m, **cost_sum(cdays, ds, sub_cats)) for m, ds in months.items()
+                      if any(c in cdays[d] for d in ds for c in sub_cats)],
+        "days": [dict(day=d.isoformat(), **{c: _r(cdays.get(d, {}).get(c, {}).get("eur", 0.0)) for c in sub_cats})
+                 for d in days_],
+    }
+    use_price = (cs["tobacco_g_per_use"] * cs["tobacco_eur_per_g"]
+                 if cs["tobacco_g_per_use"] is not None and cs["tobacco_eur_per_g"] is not None else None)
+    cost["tobacco_eur_per_use"] = _r(use_price, 3)
+    step = pb_phase or next((p for p in phases if base_phase and p["from"] > base_phase["from"]), None)
+    if use_price is not None and baseline and step and step["from"] <= to:
+        s_rate, s_n = rate_between(step["from"], to)
+        if s_rate is not None:
+            cost["saved"] = {"since": step["from"].isoformat(), "phase_name": step["name"], "days": s_n,
+                             "per_day": _r(s_rate), "baseline_per_day": baseline["per_day"],
+                             "eur": _r((baseline["per_day"] - s_rate) * s_n * use_price)}
+    tab_substances = {
+        "active": "substances" in modules or bool(trig_all),
+        "substance_kinds": dict(kinds.most_common()), "triggers_total": dict(trig_period.most_common()),
+        "trigger_order": [k for k, _ in sorted(trig_all.items(), key=lambda kv: (-kv[1], kv[0]))],
+        "use_times": [{"weekday": wd, "hour": h, "count": c} for (wd, h), c in sorted(use_times.items())],
+        "baseline": baseline, "target_per_day": target_now if is_num(target_now) else None,
+        "streaks": {"free_days": sum(1 for r in day_rows if r["logged"] and r["tobacco_n"] == 0),
+                    "logged_days": sum(1 for r in day_rows if r["logged"]), "current": current, "longest": longest},
+        "plan_b": plan_b, "cost": cost,
+    }
+
+    # ---------------------------------------------------------------- training
     lift_days = collections.defaultdict(dict)  # ex -> day -> best
     lift_all = collections.Counter()
-    for e in events:
-        if e.get("type") != "training" or not isinstance(e.get("sets"), list):
-            continue
+    last_top = {}
+    vol = collections.Counter()
+    for e in sorted((e for e in events if e.get("type") == "training"), key=_sort_key_ts):
         d = event_day(e)
-        for s in e["sets"]:
+        for s in _list(e.get("sets")):
             if not isinstance(s, dict) or not s.get("ex") or not is_num(s.get("kg")):
                 continue
             ex = str(s["ex"])
             lift_all[ex] += 1
+            reps = [x for x in _list(s.get("reps")) if is_int(x) and x > 0]
+            top_reps = max(reps) if reps else None
+            prev_top = last_top.get(norm_name(ex))
+            if not prev_top or prev_top["day"] != d.isoformat() or s["kg"] > prev_top["kg"]:
+                last_top[norm_name(ex)] = {"day": d.isoformat(), "kg": s["kg"], "reps": top_reps}
             if d not in wanted:
                 continue
-            reps = [x for x in (s.get("reps") or []) if is_int(x) and x > 0] if isinstance(s.get("reps"), list) else []
-            top_reps = max(reps) if reps else None
+            vol[d] += s["kg"] * sum(reps)
             e1 = _epley(s["kg"], top_reps)
             cur = lift_days[ex].get(d)
             if cur is None or (s["kg"], top_reps or 0) > (cur["top_kg"], cur["top_reps"] or 0):
@@ -1439,58 +2178,87 @@ def dashboard_data(ctx, days="30"):
             lift_days[ex][d] = cur
     by_days = sorted(lift_days, key=lambda x: (-len(lift_days[x]), -lift_all[x], x))
     main = sorted(by_days[:4], key=lambda x: (-lift_all[x], x))
-    lifts = {"exercises": {ex: [dict(v, e1rm=_r(v["e1rm"], 1)) for _, v in sorted(lift_days[ex].items())]
-                           for ex in main},
-             "others": sorted(by_days[4:])}
+    cal_from = max(frm, to - dt.timedelta(days=83))
+    cal_from = min(cal_from, to - dt.timedelta(days=27))
+    sessions, endurance = [], []
+    for d in all_days:
+        for e in sorted(by_day[d]["training"], key=_sort_key_ts):
+            cat = training_category(e.get("kind"))
+            if cal_from <= d <= to:
+                sessions.append({"day": d.isoformat(), "kind": e.get("kind"), "category": cat, "plan": e.get("plan"),
+                                 "dur_min": e.get("dur_min")})
+            if d in wanted and cat == "endurance":
+                km, mins = e.get("distance_km"), e.get("dur_min")
+                endurance.append({"day": d.isoformat(), "kind": e.get("kind"), "dur_min": mins, "distance_km": km,
+                                  "avg_hr": e.get("avg_hr"),
+                                  "pace_min_km": _r(mins / km) if is_num(km) and km > 0 and is_num(mins) and mins > 0 else None})
+    plan_doc = None
+    try:
+        raw = _read_text(os.path.join(ctx.me, "plans", "training.json"))
+        plan_doc = json.loads(raw) if raw else None
+    except ValueError:
+        plan_doc = None
+    next_goals = []
+    for x in _list(_dict(plan_doc).get("exercises")):
+        if not _dict(x).get("name"):
+            continue
+        lt = last_top.get(norm_name(x["name"]))
+        next_goals.append({"name": str(x["name"]), "plan": x.get("plan"), "sets": x.get("sets"), "reps": x.get("reps"),
+                           "kg": x.get("kg"), "next_kg": x.get("next_kg"),
+                           "last_day": lt["day"] if lt else None, "last_kg": lt["kg"] if lt else None,
+                           "last_reps": lt["reps"] if lt else None})
+    tab_training = {
+        "plan": plan, "schedule": {str(k): str(v) for k, v in _dict(training.get("schedule")).items()},
+        "calendar": {"from": cal_from.isoformat(), "to": to.isoformat(), "sessions": sessions},
+        "lifts": {"exercises": {ex: [dict(v, e1rm=_r(v["e1rm"], 1)) for _, v in sorted(lift_days[ex].items())]
+                                for ex in main}, "others": sorted(by_days[4:])},
+        "volume": [{"day": d.isoformat(), "kg": _r(vol[d], 1)} for d in days_ if vol.get(d)],
+        "endurance": endurance,
+        "tests": {m: by_metric[m] for m in sorted(by_metric) if m.startswith("test_")},
+        "next_goals": next_goals,
+    }
 
-    measures = {"waist_cm": [], "bp": [], "resting_hr": []}
-    for e in sorted((e for e in events if e.get("type") == "measure" and event_day(e) in wanted),
-                    key=_sort_key_ts):
-        m, day = e.get("metric"), event_day(e).isoformat()
-        if m == "bp" and is_num(e.get("sys")) and is_num(e.get("dia")):
-            measures["bp"].append({"day": day, "sys": e["sys"], "dia": e["dia"], "pulse": e.get("pulse")})
-        elif m in ("waist_cm", "resting_hr") and is_num(e.get("value")):
-            measures[m].append({"day": day, "value": e["value"]})
-
-    pantry = [{k: s.get(k) for k in DASHBOARD_PANTRY_FIELDS} for s in pantry_state(ctx) if s["status"] != "gone"]
-    recipes = sorted((e for e in load_events(ctx.cookbook_path) if isinstance(e.get("ts"), str)),
-                     key=_sort_key_ts, reverse=True)[:10]
-    cookbook = [{"day": e["ts"][:10], "name": e.get("name"), "cuisine": e.get("cuisine"),
-                 "simplicity": e.get("simplicity"), "nutrition_score": e.get("nutrition_score"),
-                 "rating": e.get("rating"), "status": e.get("status")} for e in recipes]
-
-    monday = to - dt.timedelta(days=to.weekday())
-    week_days = [monday + dt.timedelta(days=i) for i in range(to.weekday() + 1)]
-    week_agg = daily_aggregates(events, week_days)
-    training = settings.get("training") if isinstance(settings.get("training"), dict) else {}
-    plan = training.get("sessions_per_week")
-    nutrition = settings.get("nutrition") if isinstance(settings.get("nutrition"), dict) else {}
-    targets = nutrition.get("targets") if isinstance(nutrition.get("targets"), dict) else {}
-
-    previous = None
-    if key != "all":
-        n = len(days_)
-        previous = _period_counts(events, [frm - dt.timedelta(days=n - i) for i in range(n)])
+    # ---------------------------------------------------------------- journal
+    timeline = []
+    for d in reversed(days_):
+        for e in sorted((e for typ in LOG_TYPES for e in daily[d]["_events"][typ]), key=lambda e: e["ts"], reverse=True):
+            text = e.get("text") if e.get("type") == "note" else e.get("desc") if e.get("type") == "symptom" else None
+            base = {"day": d.isoformat(), "time": hhmm(e["ts"]), "type": e.get("type")}
+            if text:
+                timeline.append(dict(base, text=str(text), tags=_list(e.get("tags")), severity=e.get("severity")))
+            if e.get("note"):
+                timeline.append(dict(base, text=str(e["note"]), tags=[], severity=None, field="note"))
+    rev_list = []
+    for n in reviews:
+        rev_list.append({"file": n, "kind": "weekly" if "-W" in n else "monthly",
+                         "title": review_title(review_text(ctx.me, n), n)})
+    tab_journal = {"reviews": rev_list, "timeline": timeline, "decisions": decisions}
 
     return {
-        "schema": 1, "today": to.isoformat(), "generated_at": ctx.now().isoformat(timespec="seconds"),
+        "schema": 2, "today": to.isoformat(), "generated_at": ctx.now().isoformat(timespec="seconds"),
         "period": {"key": key, "from": frm.isoformat(), "to": to.isoformat(), "days": len(days_),
                    "days_logged": sum(1 for r in day_rows if r["logged"])},
-        "language": settings.get("language") or "en", "targets": targets,
-        "training_plan": plan if is_int(plan) and plan > 0 else DASHBOARD_TRAINING_PLAN,
-        "week": {"from": monday.isoformat(), "training_n": sum(week_agg[d]["training_n"] for d in week_days),
-                 "training_min": sum(week_agg[d]["training_min"] for d in week_days)},
+        "language": settings.get("language") or "en", "modules": modules,
         "days": day_rows, "previous": previous,
-        "substance_kinds": dict(kinds.most_common()), "triggers_total": dict(trig_period.most_common()),
-        "trigger_order": trigger_order,
-        "use_times": [{"weekday": wd, "hour": h, "count": c} for (wd, h), c in sorted(use_times.items())],
-        "sleep_vs_last_use": sleep_vs, "lifts": lifts, "measures": measures,
-        "pantry": pantry, "cookbook": cookbook,
+        "tabs": {"today": tab_today, "body": tab_body, "nutrition": tab_nutrition, "kitchen": tab_kitchen,
+                 "sleep": tab_sleep, "substances": tab_substances, "training": tab_training, "journal": tab_journal},
     }
 
 
+def bp_category(sys_, dia):
+    """ESH 2023 office categories (the higher of systolic/diastolic wins)."""
+    if sys_ >= 140 or dia >= 90:
+        return "hypertension"
+    if sys_ >= 130 or dia >= 85:
+        return "high_normal"
+    if sys_ >= 120 or dia >= 80:
+        return "normal"
+    return "optimal"
+
+
 def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="127.0.0.1"):
-    """Read-only HTTP server: static files from tools/dashboard/ and GET /api/data?days=N.
+    """Read-only HTTP server: static files from tools/dashboard/, GET /api/data?days=N and
+    GET /api/review?file=YYYY-Www.md|YYYY-MM.md (markdown of me/reviews/, whitelisted names only).
 
     Data is rebuilt from me/ on every request. Requests whose Host header is not this loopback
     address are refused (DNS-rebinding guard). Port 0 picks a free port (tests)."""
@@ -1542,6 +2310,14 @@ def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="1
                     return self._json(200, dashboard_data(Ctx(me, data, today), days))
                 except Exception as e:  # report, never crash the server
                     return self._json(500, {"error": "%s: %s" % (type(e).__name__, e)})
+            if parts.path == "/api/review":
+                name = parse_qs(parts.query).get("file", [""])[0]
+                if not REVIEW_FILE_RE.match(name):
+                    return self._json(400, {"error": "file must look like YYYY-Www.md or YYYY-MM.md"})
+                text = review_text(me, name)
+                if text is None:
+                    return self._json(404, {"error": "no such review"})
+                return self._json(200, {"file": name, "text": text})
             path = unquote(parts.path)
             segs = [s for s in path.split("/") if s]
             if ("\\" in path or "\x00" in path or any(s.startswith(".") for s in segs)):

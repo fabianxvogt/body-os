@@ -7,14 +7,16 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 
 | Path | Content | Format |
 |---|---|---|
-| `me/settings.json` | locale, timezone, active modules, household, devices, review schedule | JSON |
+| `me/settings.json` | locale, timezone, active modules, household, devices, review schedule, phases, goals, costs ([below](#settingsjson)) | JSON |
 | `me/profile.md` | baseline facts and goals from the interview (no name, birth date, address, insurance number) | Markdown |
 | `me/AGENT.md` | personal agent rules (coach style, plan rules, priorities) | Markdown |
 | `me/log/YYYY/YYYY-MM.jsonl` | health events, one JSON object per line, append-only by convention | JSONL |
 | `me/pantry/pantry.jsonl` | pantry events (purchases, consumption, discards, adjustments) | JSONL |
 | `me/recipes/cookbook.jsonl` | suggested/cooked recipes and ratings | JSONL |
 | `me/plans/*.md` | current plans (training, start plan, substance plan …) | Markdown |
-| `me/reviews/YYYY-Www.md`, `me/reviews/YYYY-MM.md` | weekly and monthly reviews | Markdown |
+| `me/plans/training.json` | current working weights, agent-maintained: `{exercises: [{name, plan, sets, reps, kg, next_kg?}]}` | JSON |
+| `me/pantry/shopping-list.md` | shopping list the agent writes at the weekly review (checkboxes `- [ ]` allowed) | Markdown |
+| `me/reviews/YYYY-Www.md`, `me/reviews/YYYY-MM.md` | weekly and monthly reviews; the dashboard shows the first item under a heading containing "Fokus"/"Focus" as the week's focus | Markdown |
 | `me/doctor/` | doctor checklists, transcribed lab values (raw PDFs optional, never required) | Markdown |
 | `me/inbox/` | device exports waiting for import (JSON/CSV) | any |
 
@@ -30,6 +32,7 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 | `src` | no | `chat` (default), `photo`, `device`, `import`, `estimate` |
 | `conf` | no | `high`, `med`, `low` — confidence of estimated values |
 | `note` | no | free text |
+| `price_eur` | no | money paid for this event (meal eaten out, drink bought on the go, substance bought by the unit); see [costs](#costs) |
 
 ## Event types
 
@@ -37,13 +40,13 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 |---|---|
 | `weight` | `kg` |
 | `sleep` | `bed` (ts), `wake` (ts), `quality` 1–5, `wakeups` int, `dur_min` (device, optional), `deep_min`/`rem_min` (device, optional) |
-| `meal` | `slot` (`breakfast`/`lunch`/`dinner`/`snack`), `desc`, `items` [{`name`, `g`, `food_id`?}], `kcal`, `protein_g`, `carbs_g`, `fat_g`, `fiber_g`, `pantry_used` [{`item_id`, `qty`}] |
+| `meal` | `slot` (`breakfast`/`lunch`/`dinner`/`snack`), `desc`, `items` [{`name`, `g`, `food_id`?, `kcal`?, `protein_g`?}], `kcal`, `protein_g`, `carbs_g`, `fat_g`, `fiber_g`, `pantry_used` [{`item_id`, `qty`}] — item-level `protein_g` feeds "top protein sources" |
 | `drink` | `kind` (`water`/`coffee`/`tea`/`alcohol`/`soft`/`other`), `ml`, `caffeine_mg`?, `alcohol_units`? (1 unit = 10 g ethanol) |
-| `substance` | `kind` (`joint`/`cigarette`/`vape`/`cannabis_vape`/`nicotine_replacement`/`other`), `count` (default 1), `tobacco` bool, `trigger` (free text: `stress`, `boredom`, `after-meal`, `break`, `evening`, `social` …), `g`? |
+| `substance` | `kind` (`joint`/`cigarette`/`vape`/`cannabis_vape`/`nicotine_replacement`/`other`), `count` (default 1), `tobacco` bool, `trigger` (free text: `stress`, `boredom`, `after-meal`, `break`, `evening`, `social` …), `g`? (cigarette: tobacco g; joint/vape: cannabis g) |
 | `training` | `kind` (`strength`/`run`/`bike`/`walk`/`sport`/`other`), `plan` (e.g. `A`), `dur_min`, `sets` [{`ex`, `kg`, `reps` [int]}], `distance_km`?, `avg_hr`?, `rpe` 1–10? |
 | `checkin` | `energy` 1–5, `mood` 1–5, `stress` 1–5 (any subset) |
 | `symptom` | `desc`, `severity` 1–5 |
-| `measure` | `metric` (`waist_cm`, `arm_cm`, `chest_cm`, `thigh_cm`, `resting_hr`, `hrv_ms`, `steps`, `vo2max`, `bp`, `test_<name>` …), `value`, `unit`; for `bp`: `sys`, `dia`, `pulse` |
+| `measure` | `metric` (`waist_cm`, `arm_cm`, `chest_cm`, `thigh_cm`, `resting_hr`, `hrv_ms`, `steps`, `vo2max`, `bp`, `test_<name>` for field tests …), `value`, `unit`; for `bp`: `sys`, `dia`, `pulse` |
 | `lab` | `test`, `value`, `unit`, `ref_low`?, `ref_high`?, `lab_date` |
 | `note` | `text`, `tags` [] |
 
@@ -73,7 +76,7 @@ Derived status (`bos pantry`):
 | `soon` | `expires` within 2 days |
 | `check` | past `expires` for `best_before` or `none` — inspect before use (look, smell, texture), use `check_hint` |
 | `discard` | past `expires` for `use_by`, or `check` for more than the item's grace (default 7 days `best_before`, 2 days `none`) |
-| `gone` | fully consumed, discarded, or adjusted to gone |
+| `gone` | fully consumed, discarded, or adjusted to gone (`gone_at` = date; discarded items count as food waste: `price_eur` × share left) |
 
 Items in `check` or `discard` are never used in cooking suggestions.
 
@@ -90,3 +93,42 @@ Items in `check` or `discard` are never used in cooking suggestions.
 attribution: Max Rubner-Institut (2025), *Bundeslebensmittelschlüssel (BLS), Version 4.0*,
 doi:10.25826/Data20251217-134202-0) and, optionally, Open Food Facts (ODbL). Values are per 100 g
 edible portion; missing values stay missing, never zero.
+
+## settings.json
+
+Written during onboarding, edited by the agent when plans change. Everything below is **optional**;
+the dashboard shows an empty state or a hint when a key is missing. Defaults: [templates/me/settings.json](../templates/me/settings.json).
+
+| Key | Shape | Used for |
+|---|---|---|
+| `language`, `timezone`, `modules`, `reviews`, … | see template | basics (German dashboard when `language` is `de`) |
+| `phases` | `[{id, name, from, to?, focus, targets?: {tobacco_per_day?}}]` | plan phases; current phase banner ("day X of Y"), baseline = phase `baseline` (else the first phase), phase target line |
+| `decisions` | `[{date, title, status: open\|done, note?}]` | next open decision with days left; decision list in the journal |
+| `goals.weight_rate_kg_month` | `[lo, hi]` kg per month, e.g. `[-2, -0.5]` | weight goal corridor, anchored at the first weight of the current (else first) phase |
+| `goals.protein_g_per_kg` | `[lo, hi]`, e.g. `[1.6, 2.0]` | protein target band = goal × latest 7-day weight (else `nutrition.targets.protein_g`) |
+| `nutrition.targets` | `{protein_g?, kcal?}` number or `[lo, hi]` | target lines/bands |
+| `training.sessions_per_week` | int (default 4) | weekly plan line |
+| `training.schedule` | `{"mon": "strength", "sat\|sun": "endurance"}` | "due today" (`sat\|sun` = either day); value matches a training `kind`, a category (`strength`, `endurance` = run/bike, `other`) or a `plan` letter |
+| `measurements` | `{waist_cm: "weekly:mon", circumferences: "monthly:first-sun", bp: "2x-week"}` | due measurements: `weekly:<day>` due on that weekday unless logged in the last 6 days; `monthly:first-<day>` due on that day unless logged this month; `<n>x-week` = n per ISO week. `circumferences` covers waist/arm/chest/thigh/hip/neck |
+| `checklist` | default `["weight", "sleep", "meals>=2", "checkin"]` | today's check-in list; any event type works, `name>=n` sets a minimum count |
+| `substances.plan_b` | `{window_days: 14, phase_id: "tobacco-step-1", threshold_pct_of_baseline: 90}` | plan-B check once that phase has started: last ≤ 7 full days vs. baseline; "Plan B due" when ≥ threshold after the window |
+| `reviews.weekly` | e.g. `"sunday-evening"` (first three letters = weekday) | "weekly review due" on that day when `reviews/YYYY-Www.md` is missing |
+| `costs` | see below | spending estimates |
+
+### Costs
+
+`costs: {currency: "EUR", tobacco_eur_per_g, tobacco_g_per_use, cannabis_eur_per_g, cannabis_g_per_use,
+alcohol_eur_per_unit, coffee_eur_per_cup_home}` (all `null` = unknown). Categories, in this fixed order:
+
+| Category | Source |
+|---|---|
+| groceries | pantry purchase items with `price_eur` |
+| eating & drinking out | `meal`/`drink` events with `price_eur` (home-cooked meals add nothing: groceries are counted at purchase) |
+| tobacco | `price_eur`, else ≈ `tobacco_g_per_use` (or a cigarette's `g`) × `tobacco_eur_per_g` × `count`; joints with `tobacco: true` add one tobacco portion |
+| cannabis | `price_eur`, else ≈ (event `g` or `cannabis_g_per_use`) × `cannabis_eur_per_g` (joints, `cannabis_vape`) |
+| alcohol | `price_eur`, else ≈ `alcohol_units` × `alcohol_eur_per_unit` |
+| coffee | `price_eur` (bought), else ≈ `coffee_eur_per_cup_home` per coffee |
+
+Derived costs are estimates and marked "≈" in the dashboard. Events whose cost cannot be computed are
+counted as "without a price" and the missing setting is named.
+
