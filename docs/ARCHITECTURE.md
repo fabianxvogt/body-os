@@ -89,6 +89,17 @@ in the private folder.
 - `bos service install [--lan]` (macOS) runs it as a launchd agent (`io.body-os.dashboard`); its log
   (`data/dashboard.log`, mode 0600) never contains the key — pair phones via `/devices`.
 
+## Home server (optional)
+
+A device that is always on at home (e.g. a Raspberry Pi) can be the **source of truth**:
+`bos sync setup --host user@host.local` clones the engine there and creates the private repos with
+the same layout (`receive.denyCurrentBranch updateInstead`, so pushes update its working tree and its
+dashboard immediately). Every agent machine is a working copy with full history (= backup) and runs
+`bos sync` before and after check-ins. JSONL files merge as a union (`.gitattributes`), so appends from
+two devices never conflict. Remotes are only allowed on the home network (`.local`, `.fritz.box`,
+private IPs, or `sync.allowed_hosts`); `bos sync` refuses and `bos doctor` warns otherwise. Remote
+access from outside goes through a home VPN (e.g. the router's WireGuard), never a public port.
+
 ## Data flow
 
 ```

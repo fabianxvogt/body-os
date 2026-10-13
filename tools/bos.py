@@ -3025,7 +3025,159 @@ def cmd_profile_consent(ctx, args):
 
 
 # --------------------------------------------------------------------------------------------
-# service (macOS launchd agent for the dashboard)
+# sync (home server as source of truth for the private repos)
+# --------------------------------------------------------------------------------------------
+
+SYNC_REMOTE = "home"
+UNION_ATTR = "*.jsonl merge=union\n"
+
+
+def private_repos(ctx):
+    """[(label, path)] of every private repo: household/ and each member folder, or just me/."""
+    if ctx.household:
+        out = [("household", ctx.household_dir)]
+        for m in ctx.household["members"]:
+            out.append((m["id"], ctx.for_profile(m["id"]).me))
+        return out
+    return [("me", ctx.me)]
+
+
+def remote_host(url):
+    """Host part of a git remote URL; '' for local paths."""
+    m = re.match(r"^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)", url, re.I)
+    if m:
+        return m.group(1).strip("[]").lower()
+    m = re.match(r"^(?:[^@/:]+@)?([^:/]+):(?!//)", url)  # scp-like user@host:path
+    if m and not os.path.exists(url):
+        return m.group(1).lower()
+    return ""
+
+
+def is_home_remote(url, allowed=()):
+    """True for local paths, *.local / *.fritz.box / *.home.arpa names, private or link-local IPs,
+    and hosts listed in settings sync.allowed_hosts. Anything else (GitHub, cloud) is not home."""
+    host = remote_host(url)
+    if not host:
+        return True
+    if host in {h.lower() for h in allowed} or host == "localhost":
+        return True
+    if host.endswith((".local", ".fritz.box", ".home.arpa", ".lan")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_private or ip.is_link_local or ip.is_loopback
+    except ValueError:
+        return False
+
+
+def sync_allowed_hosts(ctx):
+    hosts = []
+    for path in ([os.path.join(ctx.household_dir, "settings.json")] if ctx.household else []) + \
+            [os.path.join(ctx.me, "settings.json")]:
+        cfg = _dict(read_json_file(path, {}))
+        hosts += [h for h in _list(_dict(cfg.get("sync")).get("allowed_hosts")) if isinstance(h, str)]
+    return hosts
+
+
+def _ensure_union_merge(path):
+    """Concurrent appends to the same JSONL file from two devices merge as a union instead of conflicting."""
+    ga = os.path.join(path, ".gitattributes")
+    cur = open(ga, encoding="utf-8").read() if os.path.exists(ga) else ""
+    if UNION_ATTR.strip() not in cur:
+        with open(ga, "a", encoding="utf-8") as f:
+            f.write(("" if not cur or cur.endswith("\n") else "\n") + UNION_ATTR)
+        return True
+    return False
+
+
+def _git_ok(args, cwd, quiet=False):
+    r = git(args, cwd)
+    if r.returncode != 0 and not quiet:
+        print("  git %s: %s" % (" ".join(args), (r.stderr or r.stdout).strip().replace("\n", "\n  ")))
+    return r
+
+
+def cmd_sync_setup(ctx, args):
+    """Create the private repos on the home server (inside its engine clone) and add them as `home` remotes."""
+    target, base = args.host, args.path.rstrip("/")
+    if not is_home_remote("%s:%s" % (target, base), sync_allowed_hosts(ctx) + [target.split("@")[-1]]) \
+            and not args.force:
+        raise BosError("%s does not look like a home-network host (.local, private IP). Use --force only if "
+                       "you are sure it is your own device." % target)
+    ssh = ["ssh", "-o", "BatchMode=yes", target]
+    engine = "https://github.com/fabianxvogt/body-os.git" if not args.engine_url else args.engine_url
+    script = ("set -e; if [ ! -d %(b)s/.git ]; then git clone -q %(e)s %(b)s; fi; cd %(b)s && git config core.hooksPath .githooks"
+              % {"b": base, "e": engine})
+    print("$ ssh %s '<clone engine into %s if missing>'" % (target, base))
+    if not args.dry_run and subprocess.run(ssh + [script]).returncode != 0:
+        raise BosError("could not prepare the engine clone on %s" % target)
+    for label, path in private_repos(ctx):
+        if not is_own_repo(path):
+            print("skip %s: %s is not a git repo" % (label, path))
+            continue
+        rel = os.path.relpath(path, ctx.base)
+        if rel.startswith(".."):
+            raise BosError("%s lies outside %s; cannot mirror its layout" % (path, ctx.base))
+        remote_dir = "%s/%s" % (base, rel)
+        url = "%s:%s" % (target, remote_dir)
+        print("%s -> %s" % (label, url))
+        if args.dry_run:
+            continue
+        if _ensure_union_merge(path):
+            git(["add", ".gitattributes"], path)
+            git(["commit", "-qm", "sync: union merge for jsonl"], path)
+        init = ("set -e; mkdir -p %(d)s; cd %(d)s; [ -d .git ] || git init -q -b main; "
+                "git config receive.denyCurrentBranch updateInstead" % {"d": remote_dir})
+        if subprocess.run(ssh + [init]).returncode != 0:
+            raise BosError("could not create %s on %s" % (remote_dir, target))
+        existing = git(["remote", "get-url", SYNC_REMOTE], path)
+        git(["remote", "set-url" if existing.returncode == 0 else "add", SYNC_REMOTE, url], path)
+        if _git_ok(["push", "-q", "-u", SYNC_REMOTE, "HEAD:main"], path).returncode != 0:
+            raise BosError("push of %s failed" % label)
+    print("done. The home server is now the source of truth; run `bos.py sync` before and after check-ins.")
+    return 0
+
+
+def cmd_sync(ctx, args):
+    """Pull, then push every private repo that has a `home` remote. Commits pending changes first."""
+    allowed, failures, synced = sync_allowed_hosts(ctx), 0, 0
+    for label, path in private_repos(ctx):
+        if not is_own_repo(path):
+            continue
+        url = git(["remote", "get-url", SYNC_REMOTE], path)
+        if url.returncode != 0:
+            print("%-10s no '%s' remote (local only)" % (label, SYNC_REMOTE))
+            continue
+        url = url.stdout.strip()
+        if not is_home_remote(url, allowed):
+            print("%-10s REFUSED: remote %s is not on the home network" % (label, url))
+            failures += 1
+            continue
+        if _ensure_union_merge(path):
+            git(["add", ".gitattributes"], path)
+        if git(["status", "--porcelain"], path).stdout.strip():
+            git(["add", "-A"], path)
+            git(["commit", "-qm", "sync %s" % ctx.now().strftime("%Y-%m-%d %H:%M")], path)
+        if not args.push_only:
+            fetched = _git_ok(["fetch", "-q", SYNC_REMOTE], path)
+            if fetched.returncode != 0:
+                failures += 1
+                continue
+            if git(["rev-parse", "-q", "--verify", "%s/main" % SYNC_REMOTE], path).returncode == 0:
+                if _git_ok(["merge", "-q", "--no-edit", "%s/main" % SYNC_REMOTE], path).returncode != 0:
+                    print("%-10s MERGE CONFLICT - resolve in %s, commit, then sync again" % (label, path))
+                    failures += 1
+                    continue
+        if not args.pull_only and _git_ok(["push", "-q", SYNC_REMOTE, "HEAD:main"], path).returncode != 0:
+            failures += 1
+            continue
+        synced += 1
+        print("%-10s synced with %s" % (label, url))
+    return 1 if failures else 0
+
+
+# --------------------------------------------------------------------------------------------
+# service (macOS launchd agent / Linux systemd user unit for the dashboard)
 # --------------------------------------------------------------------------------------------
 
 SERVICE_LABEL = "io.body-os.dashboard"
@@ -3071,11 +3223,65 @@ def _port_open(port):
         return False
 
 
+SYSTEMD_UNIT = "body-os-dashboard.service"
+
+
+def systemd_unit(ctx, port, lan):
+    argv = [sys.executable, os.path.abspath(__file__)]
+    for flag in ("me", "data", "household"):
+        if ctx.opts.get(flag):
+            argv += ["--" + flag, os.path.abspath(ctx.opts[flag])]
+    argv += ["dashboard", "--port", str(port)] + (["--lan"] if lan else [])
+    return ("[Unit]\nDescription=body-os dashboard\nAfter=network-online.target\nWants=network-online.target\n\n"
+            "[Service]\nWorkingDirectory=%s\nExecStart=%s\nEnvironment=PYTHONUNBUFFERED=1\n"
+            "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n" % (ROOT, " ".join(argv)))
+
+
+def cmd_service_linux(ctx, args):
+    path = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user", SYSTEMD_UNIT)
+    run = lambda cmd: _launchctl(cmd, args.dry_run)  # same print-and-run helper
+    if args.service_cmd == "install":
+        unit = systemd_unit(ctx, args.port, args.lan)
+        if args.dry_run:
+            print("# would write %s\n%s" % (path, unit))
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(unit)
+            print("wrote %s" % path)
+        run(["systemctl", "--user", "daemon-reload"])
+        run(["systemctl", "--user", "enable", "--now", SYSTEMD_UNIT])
+        run(["systemctl", "--user", "restart", SYSTEMD_UNIT])
+        user = os.environ.get("USER") or ""
+        linger = subprocess.run(["loginctl", "show-user", user, "-p", "Linger"], capture_output=True, text=True) \
+            if not args.dry_run else None
+        if linger is not None and "Linger=yes" not in linger.stdout:
+            print("NOTE: to keep the dashboard running after logout/reboot, run once (needs your password):\n"
+                  "  sudo loginctl enable-linger %s" % user)
+        print("dashboard service: http://127.0.0.1:%d/%s" % (args.port, " - LAN on" if args.lan else ""))
+        return 0
+    if args.service_cmd == "uninstall":
+        run(["systemctl", "--user", "disable", "--now", SYSTEMD_UNIT])
+        if not args.dry_run and os.path.exists(path):
+            os.remove(path)
+            print("removed %s" % path)
+        run(["systemctl", "--user", "daemon-reload"])
+        return 0
+    r = subprocess.run(["systemctl", "--user", "is-active", SYSTEMD_UNIT], capture_output=True, text=True) \
+        if not args.dry_run else None
+    active = bool(r) and r.stdout.strip() == "active"
+    print("unit:    %s" % (path if os.path.exists(path) else "not installed"))
+    print("systemd: %s" % (r.stdout.strip() if r else "(dry run)"))
+    print("port:    %d %s" % (args.port, "responds" if _port_open(args.port) else "does not respond"))
+    return 0 if active else 1
+
+
 def cmd_service(ctx, args):
     import plistlib
+    if sys.platform.startswith("linux"):
+        return cmd_service_linux(ctx, args)
     if sys.platform != "darwin":
-        raise BosError("`bos service` manages a macOS launchd agent; on this system run "
-                       "`bos.py dashboard` under your own service manager (e.g. a systemd user unit)")
+        raise BosError("`bos service` supports macOS (launchd) and Linux (systemd --user)")
     path = service_plist_path()
     domain = "gui/%d" % os.getuid()
     if args.service_cmd == "install":
@@ -3154,10 +3360,15 @@ def cmd_doctor(ctx, args):
         """Own git repo, no remote, ignored by the engine repo when inside it."""
         if is_own_repo(path):
             report("OK", "%s is its own git repository" % label)
-            remotes = git(["remote", "-v"], path).stdout.strip()
-            if remotes:
-                report("WARN", "!!! %s HAS A GIT REMOTE - personal health data could be pushed. "
-                               "Remove it unless this is deliberate:\n     %s" % (label, remotes.replace("\n", "\n     ")))
+            names = [n for n in git(["remote"], path).stdout.split() if n]
+            urls = {n: git(["remote", "get-url", n], path).stdout.strip() for n in names}
+            foreign = {n: u for n, u in urls.items() if not is_home_remote(u, sync_allowed_hosts(ctx))}
+            if foreign:
+                report("WARN", "!!! %s HAS A REMOTE OUTSIDE THE HOME NETWORK - personal health data could leave "
+                               "home. Remove it unless deliberate:\n     %s" % (
+                                   label, "\n     ".join("%s %s" % kv for kv in foreign.items())))
+            elif urls:
+                report("OK", "%s syncs only within the home network (%s)" % (label, ", ".join(urls.values())))
             else:
                 report("OK", "%s has no remote" % label)
         else:
@@ -3646,7 +3857,18 @@ def main(argv=None):
     pc.add_argument("id")
     pc.add_argument("--revoke", action="store_true", help="withdraw consent: nothing new is logged")
 
-    sp = sub.add_parser("service", help="macOS: run the dashboard in the background (launchd agent)")
+    sp = sub.add_parser("sync", help="home server sync of the private repos (pull, then push)")
+    sp.add_argument("--pull-only", action="store_true")
+    sp.add_argument("--push-only", action="store_true")
+    syn = sp.add_subparsers(dest="sync_cmd")
+    ss = syn.add_parser("setup", help="create the private repos on a home server and add `home` remotes")
+    ss.add_argument("--host", required=True, help="ssh target on the home network, e.g. fabian@faberry.local")
+    ss.add_argument("--path", default="body-os", help="engine folder on the server (relative to its home)")
+    ss.add_argument("--engine-url", help="git URL of the engine to clone on the server (default: GitHub)")
+    ss.add_argument("--force", action="store_true", help="allow a host that does not look like a home address")
+    ss.add_argument("--dry-run", action="store_true")
+
+    sp = sub.add_parser("service", help="run the dashboard in the background (macOS launchd / Linux systemd --user)")
     ssub = sp.add_subparsers(dest="service_cmd", required=True)
     for name, hlp in (("install", "write ~/Library/LaunchAgents/%s.plist and load it" % SERVICE_LABEL),
                       ("uninstall", "unload and remove the launchd agent"),
@@ -3684,6 +3906,8 @@ def main(argv=None):
                 args.profile_cmd](ctx, args)
         if args.cmd == "service":
             return cmd_service(ctx, args)
+        if args.cmd == "sync":
+            return cmd_sync_setup(ctx, args) if args.sync_cmd == "setup" else cmd_sync(ctx, args)
         if args.cmd == "food":
             return cmd_food_search(ctx, args) if args.food_cmd == "search" else cmd_food_calc(ctx, args)
         return handlers[args.cmd](ctx, args)

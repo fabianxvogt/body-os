@@ -57,6 +57,9 @@ synthetic tests use `examples/demo-household/`. Details: [docs/ARCHITECTURE.md](
 4. Store with `python3 tools/bos.py log '<json or array>'` (pantry: `pantry-log`; household mode:
    add `--profile <id>`). Then `git -C me add -A && git -C me commit -qm "check-in <date>"` (household
    mode: the member's folder, and `git -C household …` after pantry/cookbook changes).
+   **Home server:** if the private repos have a `home` remote, run `python3 tools/bos.py sync` once at
+   the start of the session (before reading) and after every commit — the server is the source of
+   truth, this machine is a working copy and backup. Never add a remote outside the home network.
 5. Reply short: a compact confirmation of what was stored (one line per event group), then at most
    one relevant observation or tip. No lectures in daily check-ins.
 6. First check-in of the day: add one line from `bos pantry` if anything is `soon`, `check` or
@@ -96,6 +99,9 @@ python3 tools/bos.py food calc '<json>'    # sum nutrients for [{food_id, g}]
 python3 tools/bos.py build | dash          # SQLite + local Datasette raw-table view (127.0.0.1)
 python3 tools/bos.py dashboard [--port 8030] [--days 14|30|90|all]   # 8-tab dashboard, live from me/ (127.0.0.1)
 python3 tools/bos.py dashboard --lan [--rotate-key]   # also for phones in the home network (household key)
+python3 tools/bos.py sync [--pull-only|--push-only]    # home server: pull, then push all private repos
+python3 tools/bos.py sync setup --host user@pi.local   # make a home server the source of truth
+python3 tools/bos.py service install --lan            # background dashboard (macOS launchd / Linux systemd --user)
 python3 tools/bos.py household init --member-id ID --member-name NAME [--color C] [--name HOME]
 python3 tools/bos.py profile add ID --name N [--color C] [--language de|en] | profile list | profile consent ID [--revoke]
 python3 tools/bos.py --profile ID <command>    # household mode: act for that member

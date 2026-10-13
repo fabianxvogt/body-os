@@ -3,6 +3,7 @@
 All tests work on temporary copies; examples/demo-me is never written to.
 """
 
+import argparse
 import contextlib
 import datetime as dt
 import hashlib
@@ -620,6 +621,55 @@ class TestUpcomingPhase(unittest.TestCase):
         self.assertIsNone(bos.upcoming_phase_json(phases, dt.date(2026, 10, 14)))
 
 
+class TestSync(unittest.TestCase):
+    def test_home_remote_classification(self):
+        home = ["fabian@faberry.local:body-os/me", "ssh://pi@192.168.178.63/x", "/srv/x", "nas.fritz.box:x",
+                "pi@10.0.0.5:x"]
+        away = ["git@github.com:a/b.git", "https://github.com/a/b", "ssh://me@example.com/x", "pi@8.8.8.8:x"]
+        for u in home:
+            self.assertTrue(bos.is_home_remote(u), u)
+        for u in away:
+            self.assertFalse(bos.is_home_remote(u), u)
+        self.assertTrue(bos.is_home_remote("me@myserver.example:x", ["myserver.example"]))
+
+    def test_sync_merges_concurrent_jsonl_appends(self):
+        tmp = tempfile.mkdtemp(prefix="bos-sync-")
+        try:
+            g = lambda cwd, *a: subprocess.run(["git"] + list(a), cwd=cwd, capture_output=True, text=True)
+            server, me = os.path.join(tmp, "server"), os.path.join(tmp, "me")
+            os.makedirs(os.path.join(me, "log"))
+            for repo in (me,):
+                g(repo, "init", "-q", "-b", "main")
+            for repo in (me,):
+                g(repo, "config", "user.email", "t@example.invalid")
+                g(repo, "config", "user.name", "t")
+            line = lambda n: '{"id": "w%d", "ts": "2026-10-1%dT08:00:00+02:00", "type": "weight", "kg": 70}\n' % (n, n)
+            with open(os.path.join(me, "log", "a.jsonl"), "w") as f:
+                f.write(line(1))
+            g(me, "add", "-A"); g(me, "commit", "-qm", "init")
+            g(tmp, "clone", "-q", me, server)
+            g(server, "config", "receive.denyCurrentBranch", "updateInstead")
+            g(server, "config", "user.email", "t@example.invalid"); g(server, "config", "user.name", "t")
+            g(me, "remote", "add", "home", server)
+            ctx = bos.Ctx(me, os.path.join(tmp, "data"))
+            self.assertEqual(bos.cmd_sync(ctx, argparse.Namespace(push_only=False, pull_only=False)), 0)
+            # concurrent appends on both sides
+            with open(os.path.join(server, "log", "a.jsonl"), "a") as f:
+                f.write(line(2))
+            g(server, "commit", "-qam", "server side")
+            with open(os.path.join(me, "log", "a.jsonl"), "a") as f:
+                f.write(line(3))
+            self.assertEqual(bos.cmd_sync(ctx, argparse.Namespace(push_only=False, pull_only=False)), 0)
+            with open(os.path.join(server, "log", "a.jsonl")) as f:
+                ids = [json.loads(l)["id"] for l in f if l.strip()]
+            self.assertEqual(sorted(ids), ["w1", "w2", "w3"])
+            # a non-home remote is refused
+            g(me, "remote", "set-url", "home", "git@github.com:someone/leak.git")
+            self.assertEqual(bos.cmd_sync(ctx, argparse.Namespace(push_only=False, pull_only=False)), 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class TestHooks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bos-hook-")
@@ -1127,7 +1177,7 @@ class TestProfiles(InitBase):
         self.assertIn("me/ (alex) has no remote", out)
         bos.git(["remote", "add", "origin", "https://example.invalid/x.git"], os.path.join(self.tmp, "people", "louise"))
         code, out, _ = self.bos("doctor")
-        self.assertIn("!!! people/louise/ (louise, no consent yet) HAS A GIT REMOTE", out)
+        self.assertIn("!!! people/louise/ (louise, no consent yet) HAS A REMOTE OUTSIDE THE HOME NETWORK", out)
 
     def test_engine_ignores_people_and_household(self):
         for d in ("people/", "household/", "people/x/log/2026/2026-10.jsonl", "household/server.json"):
@@ -1364,8 +1414,15 @@ class TestService(unittest.TestCase):
         code, out, _ = self.svc("status", "--dry-run")
         self.assertIn("not installed", out)
 
-    def test_non_macos_is_a_clear_error(self):
-        code, _, err = self.svc("install", "--dry-run", platform="linux")
+    def test_linux_writes_a_systemd_user_unit(self):
+        code, out, _ = self.svc("install", "--dry-run", "--lan", platform="linux")
+        self.assertEqual(code, 0)
+        self.assertIn("ExecStart=", out)
+        self.assertIn("dashboard --port 8030 --lan", out)
+        self.assertIn("$ systemctl --user enable --now body-os-dashboard.service", out)
+
+    def test_other_platforms_are_a_clear_error(self):
+        code, _, err = self.svc("install", "--dry-run", platform="win32")
         self.assertEqual(code, 2)
         self.assertIn("macOS", err)
 

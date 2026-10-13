@@ -18,6 +18,8 @@
 - Chart generation for monthly reviews.
 
 ## Done
+- 2026-10-13: home server mode — `bos sync setup|sync` (home-network-only remotes, union merge
+  for JSONL), Linux systemd user service, doctor accepts home remotes only.
 - 2026-10-13: households and phones — household mode (`household/household.json`, shared pantry,
   cookbook, shopping list and kitchen settings; `bos household init` moves the kitchen without
   overwriting; `bos profile add|list|consent`; `--profile`, `--household`), consent gate (no events
