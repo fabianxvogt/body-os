@@ -36,7 +36,8 @@ engine and configure it in `me/`.
 ## Data flow
 
 ```
-chat / photo / device export ──agent──▶ me/*.jsonl ──bos build──▶ data/body-os.sqlite ──▶ Datasette dashboard
+chat / photo / device export ──agent──▶ me/*.jsonl ──bos build──▶ data/body-os.sqlite ──▶ Datasette raw tables
+                                         me/*.jsonl ──bos dashboard──▶ 127.0.0.1 chart dashboard (live, read-only)
 public food data ──bos foods-import──▶ data/foods.sqlite ──bos food──▶ nutrient estimates
 ```
 

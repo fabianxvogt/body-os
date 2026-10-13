@@ -5,6 +5,7 @@ All tests work on temporary copies; examples/demo-me is never written to.
 
 import contextlib
 import datetime as dt
+import hashlib
 import io
 import json
 import os
@@ -292,6 +293,141 @@ class TestBuild(TempMe):
         os.makedirs(empty)
         code, _, _ = run("--me", empty, "--data", os.path.join(self.tmp, "d2"), "build")
         self.assertEqual(code, 0)
+
+
+class TestDashboard(TempMe):
+    KEYS = ("schema", "today", "period", "language", "targets", "training_plan", "week", "days", "previous",
+            "substance_kinds", "triggers_total", "trigger_order", "use_times", "sleep_vs_last_use", "lifts",
+            "measures", "pantry", "cookbook")
+    DAY_KEYS = ("day", "weight_kg", "weight_7d", "sleep_h", "sleep_quality", "wakeups", "kcal", "protein_g",
+                "water_ml", "caffeine_n", "last_caffeine", "alcohol_units", "substance_n", "tobacco_n", "triggers",
+                "last_substance", "training_n", "training_min", "energy", "mood", "stress")
+
+    def test_demo_data_matches_summary(self):
+        ctx = bos.Ctx(self.me, self.data, DEMO_TODAY)
+        d = bos.dashboard_data(ctx, "14")
+        for k in self.KEYS:
+            self.assertIn(k, d)
+        for k in self.DAY_KEYS:
+            self.assertIn(k, d["days"][0])
+        json.dumps(d)  # JSON-serialisable
+        self.assertEqual((d["period"]["from"], d["period"]["to"], d["period"]["days"]), ("2026-09-30", "2026-10-13", 14))
+        p = bos.build_summary(ctx, dt.date(2026, 9, 30), dt.date(2026, 10, 13))
+        srows = {r["day"]: r for r in p["days"]}
+        for r in d["days"]:
+            s = srows[r["day"]]
+            for k in ("weight_kg", "substance_n", "tobacco_n", "training_n", "training_min", "caffeine_n",
+                      "last_substance", "kcal", "protein_g", "water_ml"):
+                self.assertEqual(r[k], s[k], (r["day"], k))
+            if s["sleep_h"] is not None:
+                self.assertAlmostEqual(r["sleep_h"], s["sleep_h"], places=2)
+            if s["weight_7d"] is not None:
+                self.assertAlmostEqual(r["weight_7d"], s["weight_7d"], places=3)
+            self.assertEqual(sum(r["triggers"].values()), r["substance_n"])
+        per = p["period"]
+        self.assertEqual(sum(r["substance_n"] for r in d["days"]), sum(per["substances_total"].values()))
+        self.assertEqual(d["substance_kinds"], per["substances_total"])
+        self.assertEqual(d["triggers_total"], per["substance_triggers"])
+        self.assertEqual(sum(u["count"] for u in d["use_times"]), sum(per["substances_total"].values()))
+        self.assertTrue(all(0 <= u["weekday"] <= 6 and 0 <= u["hour"] <= 23 for u in d["use_times"]))
+        self.assertEqual(len(d["sleep_vs_last_use"]), sum(1 for r in p["days"] if r["sleep_h"] is not None))
+        svu = {r["day"]: r for r in d["sleep_vs_last_use"]}
+        self.assertEqual(svu["2026-10-02"]["last_use_prev_evening"], "22:40")  # 10-01 evening joint
+        self.assertEqual(svu["2026-10-02"]["minutes_after_18"], 280)
+        # lifts: <= 4 exercises, Epley e1RM, top set per day
+        ex = d["lifts"]["exercises"]
+        self.assertLessEqual(len(ex), 4)
+        sq = {x["day"]: x for x in ex["squat"]}["2026-10-12"]
+        self.assertEqual((sq["top_kg"], sq["top_reps"]), (72, 8))
+        self.assertAlmostEqual(sq["e1rm"], round(72 * (1 + 8 / 30), 1))
+        self.assertEqual([m["value"] for m in d["measures"]["waist_cm"]], [86.5, 85.5])
+        self.assertEqual(len(d["measures"]["bp"]), 2)
+        # pantry: non-gone, urgency order, same statuses as `bos pantry`
+        self.assertEqual([x["item_id"] for x in d["pantry"]],
+                         [x["item_id"] for x in bos.pantry_state(ctx) if x["status"] != "gone"])
+        self.assertEqual(d["pantry"][0]["status"], "discard")
+        self.assertEqual(len(d["cookbook"]), 4)
+        self.assertEqual(d["cookbook"][0]["day"], max(c["day"] for c in d["cookbook"]))
+        self.assertEqual(d["targets"], {"protein_g": 140})
+        self.assertEqual(d["training_plan"], 4)
+        self.assertEqual(d["week"]["from"], "2026-10-12")
+        # 'all' starts at the first logged day; bad periods are rejected
+        self.assertEqual(bos.dashboard_data(ctx, "all")["period"]["from"], "2026-09-30")
+        self.assertEqual(len(bos.dashboard_data(ctx, 30)["days"]), 30)
+        with self.assertRaises(bos.BosError):
+            bos.dashboard_data(ctx, "7")
+
+    def test_empty_instance_gives_valid_empty_structure(self):
+        empty = os.path.join(self.tmp, "empty")
+        os.makedirs(empty)
+        for period in ("14", "all"):
+            d = bos.dashboard_data(bos.Ctx(empty, self.data, DEMO_TODAY), period)
+            for k in self.KEYS:
+                self.assertIn(k, d)
+            self.assertEqual(d["period"]["days_logged"], 0)
+            self.assertEqual(len(d["days"]), 14)
+            self.assertTrue(all(r["weight_kg"] is None and r["substance_n"] == 0 for r in d["days"]))
+            for k in ("use_times", "sleep_vs_last_use", "pantry", "cookbook", "trigger_order"):
+                self.assertEqual(d[k], [])
+            self.assertEqual(d["lifts"], {"exercises": {}, "others": []})
+            self.assertEqual(d["language"], "en")
+            json.dumps(d)
+
+    def test_server_serves_static_and_api_only(self):
+        import http.client
+        import threading
+        srv = bos.make_dashboard_server(bos.Ctx(self.me, self.data, DEMO_TODAY), port=0, today=DEMO_TODAY)
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        port = srv.server_address[1]
+        self.assertEqual(srv.server_address[0], "127.0.0.1")
+
+        def get(path, host=None):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            c.request("GET", path, headers={"Host": host} if host else {})
+            r = c.getresponse()
+            body = r.read()
+            c.close()
+            return r.status, r.getheader("Content-Type") or "", body
+
+        try:
+            code, ctype, body = get("/")
+            self.assertEqual(code, 200)
+            self.assertIn("text/html", ctype)
+            self.assertIn(b"echarts.min.js", body)
+            self.assertNotIn(b"http://", body.replace(b"http://www.w3.org", b""))  # no external resources
+            self.assertNotIn(b"https://", body)
+            code, ctype, body = get("/api/data?days=14")
+            self.assertEqual(code, 200)
+            self.assertIn("application/json", ctype)
+            d = json.loads(body)
+            self.assertEqual(d["period"]["days"], 14)
+            self.assertEqual(d["today"], DEMO_TODAY)
+            self.assertEqual(get("/api/data")[0], 200)  # default period
+            self.assertEqual(get("/api/data?days=evil")[0], 400)
+            for bad in ("/../tools/bos.py", "/%2e%2e/bos.py", "/..%2fbos.py", "/vendor/../../bos.py",
+                        "/.hidden", "/nope.js", "/vendor/ECHARTS-LICENSE"):
+                self.assertIn(get(bad)[0], (403, 404), bad)
+            self.assertEqual(get("/app.js")[0], 200)
+            self.assertEqual(get("/vendor/echarts.min.js")[0], 200)
+            self.assertEqual(get("/api/data?days=14", host="evil.example:%d" % port)[0], 403)  # DNS rebinding
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            c.request("POST", "/api/data", body=b"{}")
+            self.assertNotEqual(c.getresponse().status, 200)  # read-only
+            c.close()
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_vendored_echarts_matches_recorded_hash(self):
+        vendor = os.path.join(ROOT, "tools", "dashboard", "vendor")
+        with open(os.path.join(vendor, "README.md")) as f:
+            readme = f.read()
+        with open(os.path.join(vendor, "echarts.min.js"), "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+        self.assertIn(digest, readme)
+        for name in ("ECHARTS-LICENSE", "ECHARTS-NOTICE"):
+            self.assertTrue(os.path.exists(os.path.join(vendor, name)))
 
 
 class TestHooks(unittest.TestCase):

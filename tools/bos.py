@@ -1288,6 +1288,295 @@ def cmd_dash(ctx, args):
 
 
 # --------------------------------------------------------------------------------------------
+# dashboard (local web UI: tools/dashboard/ + GET /api/data, read-only, 127.0.0.1 only)
+# --------------------------------------------------------------------------------------------
+
+DASHBOARD_DIR = os.path.join(ROOT, "tools", "dashboard")
+DASHBOARD_PERIODS = ("14", "30", "90", "all")
+DASHBOARD_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                   ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+                   ".ico": "image/x-icon", ".woff2": "font/woff2"}
+DASHBOARD_CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                 "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+DASHBOARD_PANTRY_FIELDS = ("item_id", "name", "status", "days_left", "expires", "date_kind", "check_hint",
+                           "storage", "remaining", "unit", "opened", "expires_est")
+DASHBOARD_TRAINING_PLAN = 4
+
+
+def _r(v, nd=2):
+    return round(v, nd) if is_num(v) else v
+
+
+def _local_dt(ts):
+    """Wall-clock time as written in the timestamp (naive), like local_day()."""
+    return parse_ts(ts).replace(tzinfo=None)
+
+
+def _epley(kg, reps):
+    if not is_num(kg) or not is_int(reps) or reps <= 0:
+        return None
+    return kg if reps == 1 else kg * (1 + reps / 30.0)
+
+
+def _period_counts(events, days):
+    """Substance/tobacco totals and logged-day count for a list of days (for period deltas)."""
+    daily = daily_aggregates(events, days)
+    rows = [daily[d] for d in days]
+    logged = [r for r in rows if any(r["_events"].values())]
+    meal_days = [r for r in rows if r["meals"]]
+    return {"from": days[0].isoformat(), "to": days[-1].isoformat(), "days": len(days),
+            "days_logged": len(logged), "substance_n": sum(r["substance_n"] for r in rows),
+            "tobacco_n": sum(r["tobacco_n"] for r in rows),
+            "protein_g_per_day": _r(_mean([r["protein_g"] for r in meal_days]), 1),
+            "sleep_h": _r(_mean([r["sleep_h"] for r in rows]))}
+
+
+def dashboard_data(ctx, days="30"):
+    """JSON-ready dict for the local dashboard. days: 14/30/90 or 'all' (str or int)."""
+    key = str(days)
+    if key not in DASHBOARD_PERIODS:
+        raise BosError("days must be one of %s" % "/".join(DASHBOARD_PERIODS))
+    settings = ctx.settings if isinstance(ctx.settings, dict) else {}
+    events = [e for e in ctx.log_events() if event_day(e) is not None]
+    to = ctx.today
+    if key == "all":
+        seen = [event_day(e) for e in events if event_day(e) <= to]
+        frm = min(seen) if seen else to - dt.timedelta(days=13)
+    else:
+        frm = to - dt.timedelta(days=int(key) - 1)
+    days_ = [frm + dt.timedelta(days=i) for i in range((to - frm).days + 1)]
+    wanted = set(days_)
+    daily = daily_aggregates(events, days_)
+
+    weights = collections.defaultdict(list)  # same rule as weight_trend(), computed once
+    for e in events:
+        if e.get("type") == "weight" and is_num(e.get("kg")):
+            weights[event_day(e)].append(e["kg"])
+
+    def trend(d):
+        ws = [w for i in range(7) for w in weights.get(d - dt.timedelta(days=i), [])]
+        return statistics.mean(ws) if ws else None
+
+    day_rows, trig_period, kinds = [], collections.Counter(), collections.Counter()
+    for d in days_:
+        r = daily[d]
+        trig = collections.Counter()
+        for e in r["_events"]["substance"]:
+            trig[e.get("trigger") or "?"] += e.get("count") or 1
+        trig_period.update(trig)
+        kinds.update(r["substances"])
+        day_rows.append({
+            "day": d.isoformat(), "logged": any(r["_events"].values()),
+            "weight_kg": r["weight_kg"], "weight_7d": _r(trend(d), 3),
+            "sleep_h": _r(r["sleep_h"]), "sleep_quality": _r(r["sleep_quality"]), "wakeups": r["wakeups"],
+            "kcal": _r(r["kcal"], 1), "protein_g": _r(r["protein_g"], 1), "water_ml": r["water_ml"],
+            "caffeine_n": r["caffeine_n"], "last_caffeine": r["last_caffeine"],
+            "alcohol_units": _r(r["alcohol_units"]), "substance_n": r["substance_n"], "tobacco_n": r["tobacco_n"],
+            "triggers": dict(trig.most_common()), "last_substance": r["last_substance"],
+            "training_n": r["training_n"], "training_min": r["training_min"],
+            "energy": _r(r["energy"]), "mood": _r(r["mood"]), "stress": _r(r["stress"]),
+        })
+
+    # Trigger colour slots follow all-time frequency so they stay put when the period changes.
+    trig_all = collections.Counter()
+    for e in events:
+        if e.get("type") == "substance":
+            trig_all[e.get("trigger") or "?"] += e.get("count") or 1
+    trigger_order = [t for t, _ in sorted(trig_all.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+    subs = sorted(((_local_dt(e["ts"]), e) for e in events if e.get("type") == "substance"),
+                  key=lambda p: p[0])
+    use_times = collections.Counter()
+    for t, e in subs:
+        if t.date() in wanted:
+            use_times[(t.weekday(), t.hour)] += e.get("count") or 1
+
+    sleep_vs = []
+    for d in days_:
+        r = daily[d]
+        if r["sleep_h"] is None:
+            continue
+        start = dt.datetime.combine(d - dt.timedelta(days=1), dt.time(18, 0))
+        end = dt.datetime.combine(d, dt.time(6, 0))
+        beds = []
+        for e in r["_events"]["sleep"]:
+            try:
+                beds.append(_local_dt(e["bed"]))
+            except (KeyError, ValueError, TypeError):
+                pass
+        if beds:
+            end = min(end, max(min(beds), start))
+        last = None
+        for t, _ in subs:
+            if start <= t <= end:
+                last = t
+        sleep_vs.append({"day": d.isoformat(), "last_use_prev_evening": last.strftime("%H:%M") if last else None,
+                         "minutes_after_18": int((last - start).total_seconds() // 60) if last else None,
+                         "sleep_h": _r(r["sleep_h"]), "quality": _r(r["sleep_quality"])})
+
+    lift_days = collections.defaultdict(dict)  # ex -> day -> best
+    lift_all = collections.Counter()
+    for e in events:
+        if e.get("type") != "training" or not isinstance(e.get("sets"), list):
+            continue
+        d = event_day(e)
+        for s in e["sets"]:
+            if not isinstance(s, dict) or not s.get("ex") or not is_num(s.get("kg")):
+                continue
+            ex = str(s["ex"])
+            lift_all[ex] += 1
+            if d not in wanted:
+                continue
+            reps = [x for x in (s.get("reps") or []) if is_int(x) and x > 0] if isinstance(s.get("reps"), list) else []
+            top_reps = max(reps) if reps else None
+            e1 = _epley(s["kg"], top_reps)
+            cur = lift_days[ex].get(d)
+            if cur is None or (s["kg"], top_reps or 0) > (cur["top_kg"], cur["top_reps"] or 0):
+                cur = {"day": d.isoformat(), "top_kg": s["kg"], "top_reps": top_reps,
+                       "e1rm": cur["e1rm"] if cur else None}
+            if e1 is not None and (cur["e1rm"] is None or e1 > cur["e1rm"]):
+                cur["e1rm"] = e1
+            lift_days[ex][d] = cur
+    by_days = sorted(lift_days, key=lambda x: (-len(lift_days[x]), -lift_all[x], x))
+    main = sorted(by_days[:4], key=lambda x: (-lift_all[x], x))
+    lifts = {"exercises": {ex: [dict(v, e1rm=_r(v["e1rm"], 1)) for _, v in sorted(lift_days[ex].items())]
+                           for ex in main},
+             "others": sorted(by_days[4:])}
+
+    measures = {"waist_cm": [], "bp": [], "resting_hr": []}
+    for e in sorted((e for e in events if e.get("type") == "measure" and event_day(e) in wanted),
+                    key=_sort_key_ts):
+        m, day = e.get("metric"), event_day(e).isoformat()
+        if m == "bp" and is_num(e.get("sys")) and is_num(e.get("dia")):
+            measures["bp"].append({"day": day, "sys": e["sys"], "dia": e["dia"], "pulse": e.get("pulse")})
+        elif m in ("waist_cm", "resting_hr") and is_num(e.get("value")):
+            measures[m].append({"day": day, "value": e["value"]})
+
+    pantry = [{k: s.get(k) for k in DASHBOARD_PANTRY_FIELDS} for s in pantry_state(ctx) if s["status"] != "gone"]
+    recipes = sorted((e for e in load_events(ctx.cookbook_path) if isinstance(e.get("ts"), str)),
+                     key=_sort_key_ts, reverse=True)[:10]
+    cookbook = [{"day": e["ts"][:10], "name": e.get("name"), "cuisine": e.get("cuisine"),
+                 "simplicity": e.get("simplicity"), "nutrition_score": e.get("nutrition_score"),
+                 "rating": e.get("rating"), "status": e.get("status")} for e in recipes]
+
+    monday = to - dt.timedelta(days=to.weekday())
+    week_days = [monday + dt.timedelta(days=i) for i in range(to.weekday() + 1)]
+    week_agg = daily_aggregates(events, week_days)
+    training = settings.get("training") if isinstance(settings.get("training"), dict) else {}
+    plan = training.get("sessions_per_week")
+    nutrition = settings.get("nutrition") if isinstance(settings.get("nutrition"), dict) else {}
+    targets = nutrition.get("targets") if isinstance(nutrition.get("targets"), dict) else {}
+
+    previous = None
+    if key != "all":
+        n = len(days_)
+        previous = _period_counts(events, [frm - dt.timedelta(days=n - i) for i in range(n)])
+
+    return {
+        "schema": 1, "today": to.isoformat(), "generated_at": ctx.now().isoformat(timespec="seconds"),
+        "period": {"key": key, "from": frm.isoformat(), "to": to.isoformat(), "days": len(days_),
+                   "days_logged": sum(1 for r in day_rows if r["logged"])},
+        "language": settings.get("language") or "en", "targets": targets,
+        "training_plan": plan if is_int(plan) and plan > 0 else DASHBOARD_TRAINING_PLAN,
+        "week": {"from": monday.isoformat(), "training_n": sum(week_agg[d]["training_n"] for d in week_days),
+                 "training_min": sum(week_agg[d]["training_min"] for d in week_days)},
+        "days": day_rows, "previous": previous,
+        "substance_kinds": dict(kinds.most_common()), "triggers_total": dict(trig_period.most_common()),
+        "trigger_order": trigger_order,
+        "use_times": [{"weekday": wd, "hour": h, "count": c} for (wd, h), c in sorted(use_times.items())],
+        "sleep_vs_last_use": sleep_vs, "lifts": lifts, "measures": measures,
+        "pantry": pantry, "cookbook": cookbook,
+    }
+
+
+def make_dashboard_server(ctx, port=8030, default_days="30", today=None, host="127.0.0.1"):
+    """Read-only HTTP server: static files from tools/dashboard/ and GET /api/data?days=N.
+
+    Data is rebuilt from me/ on every request. Requests whose Host header is not this loopback
+    address are refused (DNS-rebinding guard). Port 0 picks a free port (tests)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    root = os.path.realpath(DASHBOARD_DIR)
+    me, data = ctx.me, ctx.data
+
+    class Handler(BaseHTTPRequestHandler):
+        def version_string(self):
+            return "body-os"
+
+        def log_message(self, fmt, *a):  # quiet; errors are visible in the browser
+            pass
+
+        def _send(self, code, body, ctype, cache="no-store"):
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", cache)
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", DASHBOARD_CSP)
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+
+        def _json(self, code, obj):
+            self._send(code, json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8")
+
+        def _host_ok(self):
+            hostport = (self.headers.get("Host") or "").strip().lower()
+            name, _, p = hostport.rpartition(":")
+            return name in ("127.0.0.1", "localhost") and p == str(self.server.server_address[1])
+
+        def do_GET(self):
+            if not self._host_ok():
+                return self._send(403, "forbidden host", "text/plain; charset=utf-8")
+            parts = urlsplit(self.path)
+            if parts.path == "/api/data":
+                qs = parse_qs(parts.query)
+                days = qs.get("days", [default_days])[0]
+                if days not in DASHBOARD_PERIODS:
+                    return self._json(400, {"error": "days must be one of %s" % "/".join(DASHBOARD_PERIODS)})
+                try:
+                    return self._json(200, dashboard_data(Ctx(me, data, today), days))
+                except Exception as e:  # report, never crash the server
+                    return self._json(500, {"error": "%s: %s" % (type(e).__name__, e)})
+            path = unquote(parts.path)
+            segs = [s for s in path.split("/") if s]
+            if ("\\" in path or "\x00" in path or any(s.startswith(".") for s in segs)):
+                return self._send(404, "not found", "text/plain; charset=utf-8")
+            full = os.path.realpath(os.path.join(root, *(segs or ["index.html"])))
+            ctype = DASHBOARD_TYPES.get(os.path.splitext(full)[1].lower())
+            if not full.startswith(root + os.sep) or not os.path.isfile(full) or not ctype:
+                return self._send(404, "not found", "text/plain; charset=utf-8")
+            with open(full, "rb") as f:
+                self._send(200, f.read(), ctype, cache="no-cache")
+
+        do_HEAD = do_GET
+
+    return ThreadingHTTPServer((host, port), Handler)
+
+
+def cmd_dashboard(ctx, args):
+    if not os.path.isdir(ctx.me):
+        print("note: no instance folder at %s yet - the dashboard will be empty" % ctx.me, file=sys.stderr)
+    try:
+        srv = make_dashboard_server(ctx, args.port, args.days, today=args.today)
+    except OSError as e:
+        raise BosError("cannot listen on 127.0.0.1:%d (%s)" % (args.port, e))
+    print("dashboard: http://127.0.0.1:%d/  (localhost only, read-only, Ctrl+C to stop)" % srv.server_address[1],
+          flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+    return 0
+
+
+# --------------------------------------------------------------------------------------------
 # init / doctor
 # --------------------------------------------------------------------------------------------
 
@@ -1767,6 +2056,9 @@ def main(argv=None):
     sub.add_parser("build", help="rebuild data/body-os.sqlite and datasette metadata")
     sp = sub.add_parser("dash", help="build, then serve the Datasette dashboard on 127.0.0.1")
     sp.add_argument("--port", type=int, default=8001)
+    sp = sub.add_parser("dashboard", help="serve the local dashboard (charts, live from me/) on 127.0.0.1")
+    sp.add_argument("--port", type=int, default=8030)
+    sp.add_argument("--days", choices=DASHBOARD_PERIODS, default="30", help="default period (14/30/90/all)")
 
     sp = sub.add_parser("foods-import", help="build data/foods.sqlite from the BLS 4.0 archive",
                         description="Build data/foods.sqlite from BLS 4.0. " + BLS_HELP)
@@ -1785,7 +2077,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     handlers = {"init": cmd_init, "doctor": cmd_doctor, "log": cmd_log, "pantry-log": cmd_pantry_log,
                 "validate": cmd_validate, "summary": cmd_summary, "pantry": cmd_pantry, "build": cmd_build,
-                "dash": cmd_dash, "foods-import": cmd_foods_import}
+                "dash": cmd_dash, "dashboard": cmd_dashboard, "foods-import": cmd_foods_import}
     try:
         ctx = Ctx(args.me, args.data, args.today)
         if args.cmd == "food":

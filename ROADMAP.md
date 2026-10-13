@@ -6,8 +6,6 @@
 - Pantry & cooking: purchase summaries, expiry statuses, suggestions with rubrics, cookbook ratings.
 
 ## Next
-- Custom local dashboard (weight trend, protein, sleep vs. last substance time, training
-  progression, substance counts, pantry expiry) on top of `data/body-os.sqlite`.
 - Device receiver: local HTTP endpoint for an iOS Shortcut / Health Auto Export JSON → events
   (dedupe, best-effort delivery).
 - Apple Health `export.zip` importer for history backfill.
@@ -20,5 +18,9 @@
 - Chart generation for monthly reviews.
 
 ## Done
+- 2026-10-13: custom local dashboard (`bos dashboard`): weight trend, protein/kcal vs. targets, sleep
+  vs. last substance time, triggers and habit-time heatmap, check-ins, training vs. plan, strength,
+  body measures, pantry expiry, cookbook; live from `me/`, 127.0.0.1 only, vendored ECharts, light/dark,
+  table views, English/German.
 - 2026-10-13: v0 — agent manual, safety rules, interview catalog, modules, data format,
   `bos` CLI with tests, BLS 4.0 import, demo persona, privacy git hooks, knowledge pages.

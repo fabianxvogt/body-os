@@ -6,9 +6,9 @@ folder tailored to you, then becomes your daily check-in partner: it logs meals 
 training, substances, body metrics and your pantry, runs weekly reviews, and teaches you what the
 numbers mean.
 
-> **Status: early (v0).** Core logging, summaries, pantry expiry logic, food lookup (German BLS 4.0)
-> and a local Datasette dashboard work. Custom dashboard and phone/wearable sync are on the
-> [roadmap](ROADMAP.md). Not a medical device — see [SAFETY.md](SAFETY.md).
+> **Status: early (v0).** Core logging, summaries, pantry expiry logic, food lookup (German BLS 4.0),
+> a local chart dashboard (`bos dashboard`) and a Datasette raw-table view work. Phone/wearable sync
+> is on the [roadmap](ROADMAP.md). Not a medical device — see [SAFETY.md](SAFETY.md).
 
 ## How it works
 
@@ -42,7 +42,9 @@ reviews — see [modules/](modules/README.md).
 ## Tools
 
 `tools/bos.py` (Python 3.9+, stdlib only): `init`, `doctor`, `log`, `pantry-log`, `validate`,
-`summary`, `pantry`, `build`, `dash`, `foods-import`, `food search|calc`. Tests:
+`summary`, `pantry`, `build`, `dash` (Datasette raw tables), `dashboard` (charts: weight, protein, sleep vs.
+last substance time, triggers and habit times, training, pantry — served read-only on 127.0.0.1, live
+from `me/`, no external requests), `foods-import`, `food search|calc`. Tests:
 `python3 -m unittest discover -s tests`.
 
 ## Data sources and credits
@@ -51,5 +53,7 @@ reviews — see [modules/](modules/README.md).
   doi:10.25826/Data20251217-134202-0 — downloaded locally, not redistributed.
 - BLS parsing approach adapted from [Supper-Board](https://github.com/fabianxvogt/Supper-Board) (MIT).
 - Open Food Facts (ODbL) for packaged products (planned).
+- [Apache ECharts](https://echarts.apache.org) 5.5.1 (Apache-2.0), vendored for the dashboard in
+  [tools/dashboard/vendor/](tools/dashboard/vendor/README.md).
 
 MIT licensed. Docs index: [docs/README.md](docs/README.md).

@@ -82,7 +82,8 @@ python3 tools/bos.py summary --days 7      # aggregated view (read this first)
 python3 tools/bos.py pantry                # pantry with expiry status
 python3 tools/bos.py food search <name>    # nutrient lookup (needs foods-import once)
 python3 tools/bos.py food calc '<json>'    # sum nutrients for [{food_id, g}]
-python3 tools/bos.py build | dash          # SQLite + local Datasette dashboard (127.0.0.1)
+python3 tools/bos.py build | dash          # SQLite + local Datasette raw-table view (127.0.0.1)
+python3 tools/bos.py dashboard [--port 8030] [--days 14|30|90|all]   # chart dashboard, live from me/ (127.0.0.1)
 ```
 
 ## 7. Engine development
