@@ -670,6 +670,45 @@ class TestSync(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class TestReadiness(TempMe):
+    def test_joint_tobacco_default_and_kinds(self):
+        with open(os.path.join(self.me, "settings.json")) as f:
+            st = json.load(f)
+        st.setdefault("substances", {})["joint_default_tobacco"] = True
+        with open(os.path.join(self.me, "settings.json"), "w") as f:
+            json.dump(st, f)
+        code, out, _ = self.bos("log", '[{"type": "substance", "kind": "joint", "trigger": "break"},'
+                                       ' {"type": "substance", "kind": "joint", "tobacco": false},'
+                                       ' {"type": "substance", "kind": "cigarette"},'
+                                       ' {"type": "substance", "kind": "cannabis_vape"}]', "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertEqual([json.loads(l)["tobacco"] for l in out.splitlines() if l.startswith("{")], [True, False, True, False])
+
+    def test_questionnaire_and_supply_events(self):
+        code, _, err = self.bos("log", '[{"type": "questionnaire", "name": "phq4", "items": [1,0,1,1], "score": 3},'
+                                       ' {"type": "supply", "item": "tobacco", "action": "open", "g": 30, "ts": "2026-10-01T10:00"},'
+                                       ' {"type": "supply", "item": "tobacco", "action": "empty", "ts": "2026-10-11T10:00"}]')
+        self.assertEqual(code, 0, err)
+        code, out, _ = self.bos("summary", "--days", "14")
+        self.assertIn("tobacco measured: 30 g in 10.0 days = 3.00 g/day", out)
+        self.assertIn("questionnaires: phq4 3", out)
+        self.assertNotEqual(self.bos("log", '{"type": "supply", "item": "tobacco", "action": "bought"}')[0], 0)
+
+    def test_duplicate_ids_count_once(self):
+        line = '{"id": "w-dup", "ts": "2026-10-12T07:00:00+02:00", "type": "weight", "kg": 99}\n'
+        path = os.path.join(self.me, "log", "2026", "2026-10.jsonl")
+        with open(path, "a") as f:
+            f.write(line)
+            f.write(line.replace("99", "98"))
+        ctx = bos.Ctx(self.me, self.data, DEMO_TODAY)
+        dups = [e for e in ctx.log_events() if e.get("id") == "w-dup"]
+        self.assertEqual([e["kg"] for e in dups], [98])
+
+    def test_summary_has_first_use_column(self):
+        code, out, _ = self.bos("summary", "--days", "3")
+        self.assertIn("first", out.splitlines()[1])
+
+
 class TestHooks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="bos-hook-")

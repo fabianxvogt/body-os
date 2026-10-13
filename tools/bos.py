@@ -34,7 +34,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # --------------------------------------------------------------------------------------------
 
 LOG_TYPES = ("weight", "sleep", "meal", "drink", "substance", "training", "checkin", "symptom",
-             "measure", "lab", "note")
+             "measure", "lab", "note", "questionnaire", "supply")
+SUPPLY_ITEMS = ("tobacco", "cannabis", "other")
+SUPPLY_ACTIONS = ("open", "empty")
 PANTRY_TYPES = ("purchase", "consume", "discard", "adjust", "open")
 SRC = ("chat", "photo", "device", "import", "estimate")
 CONF = ("high", "med", "low")
@@ -63,6 +65,8 @@ TYPE_FIELDS = {
     "measure": ["metric", "value", "unit", "sys", "dia", "pulse"],
     "lab": ["test", "value", "unit", "ref_low", "ref_high", "lab_date"],
     "note": ["text", "tags"],
+    "questionnaire": ["name", "score", "items", "interpretation"],
+    "supply": ["item", "action", "g", "name"],
 }
 COMMON_FIELDS = ["id", "ts", "type", "src", "conf", "note"]
 
@@ -432,9 +436,17 @@ class Ctx:
         return sorted(out)
 
     def log_events(self):
-        evs = []
+        """All events; a repeated id keeps its last line (edits merged from two devices)."""
+        evs, pos = [], {}
         for p in self.log_files():
-            evs += load_events(p)
+            for ev in load_events(p):
+                i = ev.get("id")
+                if i and i in pos:
+                    evs[pos[i]] = ev
+                    continue
+                if i:
+                    pos[i] = len(evs)
+                evs.append(ev)
         return evs
 
 
@@ -605,6 +617,18 @@ def validate_log_event(ev):
         _check_num(ev, "ref_low", errs)
         _check_num(ev, "ref_high", errs)
         _check_date(ev, "lab_date", errs)
+    elif t == "questionnaire":
+        _check_str(ev, "name", errs, required=True)
+        _check_num(ev, "score", errs, 0, 1000, required=True)
+        items = ev.get("items")
+        if items is not None and not (isinstance(items, list) and all(is_num(x) for x in items)):
+            errs.append("'items' must be a list of numbers")
+        _check_str(ev, "interpretation", errs)
+    elif t == "supply":
+        _check_enum(ev, "item", SUPPLY_ITEMS, errs, required=True)
+        _check_enum(ev, "action", SUPPLY_ACTIONS, errs, required=True)
+        _check_num(ev, "g", errs, 0, 10000)
+        _check_str(ev, "name", errs)
     elif t == "note":
         _check_str(ev, "text", errs, required=True)
         tags = ev.get("tags")
@@ -743,6 +767,15 @@ def fill_defaults(ctx, ev, taken, ts_keys=("ts",)):
     for k in ts_keys:
         _norm_ts_field(ctx, ev, k)
     ev.setdefault("src", "chat")
+    if ev.get("type") == "substance" and "tobacco" not in ev:
+        kind = ev.get("kind")
+        subs = _dict(_dict(ctx.settings).get("substances"))
+        if kind == "cigarette":
+            ev["tobacco"] = True
+        elif kind in ("cannabis_vape", "nicotine_replacement"):
+            ev["tobacco"] = False
+        elif kind == "joint" and isinstance(subs.get("joint_default_tobacco"), bool):
+            ev["tobacco"] = subs["joint_default_tobacco"]  # the #1 metric must never silently drop to 0
     if not ev.get("id") and isinstance(ev.get("type"), str):
         try:
             ev["id"] = new_id(ev["type"], ev["ts"], taken)
@@ -1124,6 +1157,7 @@ def daily_aggregates(events, days):
         tob = [e for e in subs if e.get("tobacco")]
         r["tobacco_n"] = sum(e.get("count") or 1 for e in tob)
         r["last_substance"] = hhmm(subs[-1]["ts"]) if subs else None
+        r["first_substance"] = hhmm(subs[0]["ts"]) if subs else None
         r["last_tobacco"] = hhmm(tob[-1]["ts"]) if tob else None
         tr = g["training"]
         r["training_n"] = len(tr)
@@ -1247,6 +1281,29 @@ def build_summary(ctx, frm, to, notes=False):
     return out
 
 
+def supply_lines(ctx):
+    """Measured consumption from pouch/pack events: g/day between an `open` and the next `empty`."""
+    evs = sorted((e for e in ctx.log_events() if e.get("type") == "supply"), key=lambda e: e.get("ts", ""))
+    out, opened = [], {}
+    for e in evs:
+        item = e.get("item")
+        if e.get("action") == "open":
+            opened[item] = e
+        elif e.get("action") == "empty" and item in opened:
+            o = opened.pop(item)
+            try:
+                days = (parse_ts(e["ts"]) - parse_ts(o["ts"])).total_seconds() / 86400
+            except (ValueError, KeyError, TypeError):
+                continue
+            g = o.get("g") or e.get("g")
+            if days > 0 and is_num(g):
+                out.append("%s measured: %s g in %.1f days = %.2f g/day (%s..%s)" % (
+                    item, fmt_num(g), days, g / days, o["ts"][:10], e["ts"][:10]))
+    for item, o in opened.items():
+        out.append("%s pack open since %s%s" % (item, o["ts"][:10], " (%s g)" % fmt_num(o["g"]) if is_num(o.get("g")) else ""))
+    return out
+
+
 def cmd_summary(ctx, args):
     frm, to = resolve_period(ctx, args)
     s = build_summary(ctx, frm, to, notes=args.notes)
@@ -1256,20 +1313,20 @@ def cmd_summary(ctx, args):
     p = s["period"]
     f1, f2 = (lambda v: fmt_num(v, 1)), (lambda v: fmt_num(v, 2))
     print("body-os summary %s..%s (%d days, %d with entries)" % (p["from"], p["to"], p["days"], p["days_logged"]))
-    fmt = "%-5s %-5s %-5s %-5s %-2s %-2s %-5s %-4s %-5s %-3s %-5s %-3s %-3s %-3s %-5s %-6s %-3s %-3s %-3s %s"
+    fmt = "%-5s %-5s %-5s %-5s %-2s %-2s %-5s %-4s %-5s %-3s %-5s %-3s %-3s %-3s %-5s %-5s %-6s %-3s %-3s %-3s %s"
     print(fmt % ("day", "wt", "wt7d", "sleep", "q", "wk", "kcal", "prot", "water", "caf", "last", "alc", "sub", "tob",
-                 "last", "trn", "E", "M", "S", "sym"))
+                 "first", "last", "trn", "E", "M", "S", "sym"))
     for r in s["days"]:
         print(fmt % (
             r["day"][5:], f1(r["weight_kg"]), f1(r["weight_7d"]), f1(r["sleep_h"]), f1(r["sleep_quality"]),
             fmt_num(r["wakeups"]), fmt_num(r["kcal"]), fmt_num(r["protein_g"]),
             fmt_num(r["water_ml"]) if r["water_ml"] else "-", r["caffeine_n"] or "-", r["last_caffeine"] or "-",
             f1(r["alcohol_units"]) if r["alcohol_units"] else "-", r["substance_n"] or "-", r["tobacco_n"] or "-",
-            r["last_substance"] or "-", ("%d/%dm" % (r["training_n"], r["training_min"])) if r["training_n"] else "-",
+            r.get("first_substance") or "-", r["last_substance"] or "-", ("%d/%dm" % (r["training_n"], r["training_min"])) if r["training_n"] else "-",
             f1(r["energy"]), f1(r["mood"]), f1(r["stress"]), r["symptoms_n"] or "-"))
     print("columns: wt kg (last of day), wt7d 7-day mean, sleep h + quality 1-5 + wakeups (night ending that day),"
           " kcal/prot g, water ml, caf = caffeinated drinks + last time, alc units, sub = substance count,"
-          " tob = tobacco count, last = last substance time, trn = sessions/min, E/M/S = energy/mood/stress 1-5,"
+          " tob = tobacco count, first/last = first/last substance time, trn = sessions/min, E/M/S = energy/mood/stress 1-5,"
           " sym = symptoms")
     print("period:")
     if p["weight_last"] is not None:
@@ -1284,6 +1341,16 @@ def cmd_summary(ctx, args):
         print("  substances %s/day: %s; tobacco %d; triggers: %s" % (
             f1(p["substances_per_day"]), ", ".join("%s %d" % kv for kv in sorted(p["substances_total"].items())),
             p["tobacco_total"], ", ".join("%s %d" % kv for kv in p["substance_triggers"].items())))
+    for line in supply_lines(ctx):
+        print("  " + line)
+    qs = [e for e in ctx.log_events() if e.get("type") == "questionnaire"]
+    if qs:
+        latest = {}
+        for e in sorted(qs, key=lambda e: e.get("ts", "")):
+            latest.setdefault(e["name"], []).append(e)
+        print("  questionnaires: " + "; ".join("%s %s (%s)%s" % (
+            n, fmt_num(v[-1]["score"]), v[-1]["ts"][:10], " prev %s" % fmt_num(v[-2]["score"]) if len(v) > 1 else "")
+            for n, v in sorted(latest.items())))
     print("  training %d sessions, %d min (%s)" % (p["training_sessions"], p["training_min"],
                                                     ", ".join("%s %d" % kv for kv in sorted(p["training_kinds"].items())) or "-"))
     print("  check-in energy %s, mood %s, stress %s; symptoms %d (mean severity %s)" % (
@@ -3495,7 +3562,39 @@ def cmd_sync(ctx, args):
             continue
         synced += 1
         print("%-10s synced with %s" % (label, url))
+    problems = []
+    for c in ([ctx.for_profile(m["id"]) for m in ctx.household["members"]] if ctx.household else [ctx]):
+        if os.path.isdir(c.me):
+            problems += validate_all(c)
+    if problems:
+        print("WARNING: %d data problem(s) after sync (e.g. duplicate ids from a merge) - run `bos.py validate`"
+              % len(problems))
+    if synced and not args.pull_only and not getattr(args, "no_engine", False):
+        _update_server_engine(ctx)
     return 1 if failures else 0
+
+
+def _update_server_engine(ctx):
+    """Fast-forward the engine clone on the home server so its dashboard knows new fields and tabs."""
+    for label, path in private_repos(ctx):
+        url = git(["remote", "get-url", SYNC_REMOTE], path).stdout.strip()
+        host = remote_host(url)
+        m = re.match(r"^(?:ssh://)?([^/:]+@?[^/:]*)[:/](.+)$", url)
+        if not host or not m:
+            continue
+        target, rpath = m.group(1), m.group(2)
+        rel = os.path.relpath(path, ctx.base).replace(os.sep, "/")
+        if not rpath.endswith(rel):
+            continue
+        base = rpath[: -len(rel)].rstrip("/") or "."
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", target,
+                            "cd %s && o=$(git rev-parse HEAD) && git pull -q --ff-only && "
+                            "if [ \"$o\" != \"$(git rev-parse HEAD)\" ]; then "
+                            "systemctl --user try-restart body-os-dashboard.service 2>/dev/null || true; fi; "
+                            "git log --oneline -1" % base],
+                           capture_output=True, text=True)
+        print("engine on %s: %s" % (host, r.stdout.strip() or r.stderr.strip().splitlines()[-1:] or "?"))
+        return
 
 
 # --------------------------------------------------------------------------------------------
@@ -4010,7 +4109,21 @@ def foods_db(ctx):
     return con
 
 
+FOOD_SYNONYMS = {"nudeln": "teigwaren", "pasta": "teigwaren", "hähnchen": "huhn", "haehnchen": "huhn",
+                 "hühnchen": "huhn", "hack": "hackfleisch", "kartoffelbrei": "kartoffelpüree", "skyr": "skyr",
+                 "pommes": "pommes frites", "brötchen": "brötchen", "semmel": "brötchen", "frischkäse": "frischkäse"}
+
+
 def search_foods(con, query, limit=10):
+    q = query.strip().lower()
+    if q in FOOD_SYNONYMS and FOOD_SYNONYMS[q] != q:
+        rows = search_foods(con, FOOD_SYNONYMS[q], limit)
+        seen = {r["food_id"] for r in rows}
+        return (rows + [r for r in search_foods.__wrapped__(con, query, limit) if r["food_id"] not in seen])[:limit]
+    return search_foods.__wrapped__(con, query, limit)
+
+
+def _search_foods(con, query, limit=10):
     key = norm_name(query)
     found = {}
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master")}
@@ -4030,6 +4143,9 @@ def search_foods(con, query, limit=10):
         return (0 if de.startswith(key) or en.startswith(key) else 1 if key in de or key in en else 2,
                 len(r["name_de"]), r["name_de"])
     return sorted(found.values(), key=rank)[:limit]
+
+
+search_foods.__wrapped__ = _search_foods
 
 
 def cmd_food_search(ctx, args):
@@ -4186,6 +4302,7 @@ def main(argv=None):
     sp = sub.add_parser("sync", help="home server sync of the private repos (pull, then push)")
     sp.add_argument("--pull-only", action="store_true")
     sp.add_argument("--push-only", action="store_true")
+    sp.add_argument("--no-engine", action="store_true", help="don't fast-forward the engine clone on the server")
     syn = sp.add_subparsers(dest="sync_cmd")
     ss = syn.add_parser("setup", help="create the private repos on a home server and add `home` remotes")
     ss.add_argument("--host", required=True, help="ssh target on the home network, e.g. fabian@faberry.local")

@@ -49,9 +49,15 @@ truth; `data/body-os.sqlite` is a disposable build product (`python3 tools/bos.p
 | `symptom` | `desc`, `severity` 1–5 |
 | `measure` | `metric` (`waist_cm`, `arm_cm`, `chest_cm`, `thigh_cm`, `resting_hr`, `hrv_ms`, `steps`, `vo2max`, `bp`, `test_<name>` for field tests …), `value`, `unit`; for `bp`: `sys`, `dia`, `pulse` |
 | `lab` | `test`, `value`, `unit`, `ref_low`?, `ref_high`?, `lab_date` |
-| `note` | `text`, `tags` [] |
+| `note` | `text`, `tags` [] (e.g. `bed` = bedtime told in the evening, completed into `sleep` next morning) |
+| `questionnaire` | `name` (`phq4`, `cudit_r`, …), `score`, `items` [numbers]?, `interpretation`? — see [interview/questionnaires/](../interview/questionnaires/README.md) |
+| `supply` | `item` (`tobacco`/`cannabis`/`other`), `action` (`open`/`empty`), `g`?, `name`? — a pouch/pack opened or finished; `bos summary` reports measured g/day between open and empty |
 
-Unknown extra fields are allowed and preserved. Units are metric. Ratings are 1 (worst) – 5 (best);
+Unknown extra fields are allowed and preserved. A repeated `id` counts once (last line wins) — union merges
+from two devices can leave an edited line twice; `bos validate` reports it.
+
+`substance` without `tobacco`: `cigarette` → true, `cannabis_vape`/`nicotine_replacement` → false, `joint` →
+`settings.substances.joint_default_tobacco` when set (agents should still set it explicitly). Units are metric. Ratings are 1 (worst) – 5 (best);
 for `stress`, 5 = most stressed.
 
 ## Pantry events (`pantry/pantry.jsonl`)

@@ -18,6 +18,9 @@
 - Chart generation for monthly reviews.
 
 ## Done
+- 2026-10-13: readiness fixes — tobacco default for joints, `questionnaire` (PHQ-4, CUDIT-R) and `supply`
+  (measured g/day) events, duplicate-id dedupe, first-use time, sync validates and updates the server
+  engine, food synonyms.
 - 2026-10-13: household comparison — Compare tab (`#vergleich` / `#compare`, household mode only) and
   `GET /api/compare?days=N`: this week's headline per group with a kind leader line, per-group detail
   (grouped bars, values with n, 🏅 lead marker, table view), weekly trends per member; habits and

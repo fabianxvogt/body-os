@@ -9,7 +9,11 @@ Knowledge: [../knowledge/tobacco-nicotine-and-cannabis.md](../knowledge/tobacco-
   `trigger: "break"`. "Z" = cigarette, "V" = cannabis vaporizer (`tobacco: false`) — or what
   `me/AGENT.md` defines.
 - "3 Joints heute, letzter 23 Uhr" → three events or one with `count: 3`, last one timed.
-- Coffee: `drink` `kind: coffee` with time; alcohol: `drink` `kind: alcohol` with `alcohol_units`.
+- Coffee: `drink` `kind: coffee` with time; alcohol: `drink` `kind: alcohol` with `alcohol_units` (and
+  `price_eur` when told).
+- Pouch/pack: "Pueblo neu auf" → `supply` `item: tobacco`, `action: open`, `g: 30`; "Pueblo leer" →
+  `action: empty`. Gives measured grams per day.
+- Questionnaires per `settings.questionnaires` (e.g. CUDIT-R at baseline): [../interview/questionnaires/](../interview/questionnaires/README.md).
 - Confirm with a count for the day; no comments on single uses during a baseline.
 
 **Coaching rules**
